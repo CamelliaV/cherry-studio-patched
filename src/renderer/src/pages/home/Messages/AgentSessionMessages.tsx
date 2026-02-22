@@ -3,20 +3,19 @@ import ContextMenu from '@renderer/components/ContextMenu'
 import { useSession } from '@renderer/hooks/agents/useSession'
 import { useTopicMessages } from '@renderer/hooks/useMessageOperations'
 import useScrollPosition from '@renderer/hooks/useScrollPosition'
-import { useSettings } from '@renderer/hooks/useSettings'
 import { EVENT_NAMES, EventEmitter } from '@renderer/services/EventService'
 import { getGroupedMessages } from '@renderer/services/MessagesService'
 import { type Topic, TopicType } from '@renderer/types'
 import { buildAgentSessionTopicId } from '@renderer/utils/agentSession'
 import { Spin } from 'antd'
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
+import { memo, useCallback, useEffect, useMemo } from 'react'
 import styled from 'styled-components'
 
 import MessageAnchorLine from './MessageAnchorLine'
 import MessageGroup from './MessageGroup'
 import NarrowLayout from './NarrowLayout'
 import PermissionModeDisplay from './PermissionModeDisplay'
-import { MessagesContainer, ScrollContainer } from './shared'
+import { MessagesContainer, MessagesViewport, ScrollContainer } from './shared'
 
 const logger = loggerService.withContext('AgentSessionMessages')
 
@@ -30,10 +29,9 @@ const AgentSessionMessages: React.FC<Props> = ({ agentId, sessionId }) => {
   const sessionTopicId = useMemo(() => buildAgentSessionTopicId(sessionId), [sessionId])
   // Use the same hook as Messages.tsx for consistent behavior
   const messages = useTopicMessages(sessionTopicId)
-  const { messageNavigation } = useSettings()
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
-
-  const { handleScroll: handleScrollPosition } = useScrollPosition(`agent-session-${sessionId}`)
+  const { containerRef: scrollContainerRef, handleScroll: handleScrollPosition } = useScrollPosition(
+    `agent-session-${sessionId}`
+  )
 
   const displayMessages = useMemo(() => {
     if (!messages || messages.length === 0) return []
@@ -44,6 +42,7 @@ const AgentSessionMessages: React.FC<Props> = ({ agentId, sessionId }) => {
     if (!displayMessages || displayMessages.length === 0) return []
     return Object.entries(getGroupedMessages(displayMessages))
   }, [displayMessages])
+  const showMessageAnchor = true
 
   const sessionAssistantId = session?.agent_id ?? agentId
   const sessionName = session?.name ?? sessionId
@@ -86,30 +85,32 @@ const AgentSessionMessages: React.FC<Props> = ({ agentId, sessionId }) => {
   }, [scrollToBottom])
 
   return (
-    <MessagesContainer
-      id="messages"
-      className="messages-container"
-      ref={scrollContainerRef}
-      onScroll={handleScrollPosition}>
-      <NarrowLayout style={{ display: 'flex', flexDirection: 'column-reverse' }}>
-        <ContextMenu>
-          <ScrollContainer>
-            {groupedMessages.length > 0 ? (
-              groupedMessages.map(([key, groupMessages]) => (
-                <MessageGroup key={key} messages={groupMessages} topic={derivedTopic} />
-              ))
-            ) : session ? (
-              <PermissionModeDisplay session={session} agentId={agentId} />
-            ) : (
-              <LoadingState>
-                <Spin size="small" />
-              </LoadingState>
-            )}
-          </ScrollContainer>
-        </ContextMenu>
-      </NarrowLayout>
-      {messageNavigation === 'anchor' && <MessageAnchorLine messages={displayMessages} />}
-    </MessagesContainer>
+    <MessagesViewport>
+      <MessagesContainer
+        id="messages"
+        className="messages-container"
+        ref={scrollContainerRef}
+        onScroll={handleScrollPosition}>
+        <NarrowLayout style={{ display: 'flex', flexDirection: 'column-reverse' }}>
+          <ContextMenu>
+            <ScrollContainer $withAnchor={showMessageAnchor}>
+              {groupedMessages.length > 0 ? (
+                groupedMessages.map(([key, groupMessages]) => (
+                  <MessageGroup key={key} messages={groupMessages} topic={derivedTopic} />
+                ))
+              ) : session ? (
+                <PermissionModeDisplay session={session} agentId={agentId} />
+              ) : (
+                <LoadingState>
+                  <Spin size="small" />
+                </LoadingState>
+              )}
+            </ScrollContainer>
+          </ContextMenu>
+        </NarrowLayout>
+      </MessagesContainer>
+      {showMessageAnchor && <MessageAnchorLine messages={displayMessages} persistKey={`agent-session-${sessionId}`} />}
+    </MessagesViewport>
   )
 }
 

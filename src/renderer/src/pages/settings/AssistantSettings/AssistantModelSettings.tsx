@@ -8,16 +8,26 @@ import { SelectModelPopup } from '@renderer/components/Popups/SelectModelPopup'
 import Selector from '@renderer/components/Selector'
 import { DEFAULT_CONTEXTCOUNT, DEFAULT_TEMPERATURE, MAX_CONTEXT_COUNT } from '@renderer/config/constant'
 import { isEmbeddingModel, isRerankModel } from '@renderer/config/models'
+import { useModelGroups } from '@renderer/hooks/useProvider'
 import { useTimer } from '@renderer/hooks/useTimer'
 import { SettingRow } from '@renderer/pages/settings'
 import { DEFAULT_ASSISTANT_SETTINGS } from '@renderer/services/AssistantService'
-import type { Assistant, AssistantSettingCustomParameters, AssistantSettings, Model } from '@renderer/types'
-import { modalConfirm } from '@renderer/utils'
+import { resolveAssistantDisplayModel } from '@renderer/services/ModelCandidatesService'
+import { getModelUniqId } from '@renderer/services/ModelService'
+import type {
+  Assistant,
+  AssistantModelGroup,
+  AssistantSettingCustomParameters,
+  AssistantSettings,
+  Model,
+  ModelGroupRoutingMode
+} from '@renderer/types'
+import { modalConfirm, uuid } from '@renderer/utils'
 import { Button, Col, Divider, Input, InputNumber, Row, Select, Slider, Switch, Tooltip } from 'antd'
 import { isNull } from 'lodash'
 import { PlusIcon } from 'lucide-react'
 import type { FC } from 'react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import styled from 'styled-components'
 
@@ -36,7 +46,12 @@ const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateA
   const [toolUseMode, setToolUseMode] = useState<AssistantSettings['toolUseMode']>(
     assistant?.settings?.toolUseMode ?? 'function'
   )
+  const { modelGroups: globalModelGroups, setModelGroups: setGlobalModelGroups } = useModelGroups()
   const [defaultModel, setDefaultModel] = useState(assistant?.defaultModel)
+  const [selectedModelGroupId, setSelectedModelGroupId] = useState<string | undefined>(assistant?.selectedModelGroupId)
+  const [modelGroupRoutingMode, setModelGroupRoutingMode] = useState<ModelGroupRoutingMode>(
+    assistant?.modelGroupRoutingMode ?? 'order-first'
+  )
   const [topP, setTopP] = useState(assistant?.settings?.topP ?? 1)
   const [enableTopP, setEnableTopP] = useState(assistant?.settings?.enableTopP ?? false)
   const [customParameters, setCustomParameters] = useState<AssistantSettingCustomParameters[]>(
@@ -47,6 +62,12 @@ const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateA
   const customParametersRef = useRef(customParameters)
 
   customParametersRef.current = customParameters
+
+  useEffect(() => {
+    setSelectedModelGroupId(assistant?.selectedModelGroupId)
+    setModelGroupRoutingMode(assistant?.modelGroupRoutingMode ?? 'order-first')
+    setDefaultModel(assistant?.defaultModel)
+  }, [assistant?.defaultModel, assistant?.modelGroupRoutingMode, assistant?.selectedModelGroupId])
 
   const { t } = useTranslation()
   const { setTimeoutTimer } = useTimer()
@@ -181,6 +202,188 @@ const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateA
     setCustomParameters(newParams)
     updateAssistantSettings({ customParameters: newParams })
   }
+  const modelFilter = useCallback((model: Model) => !isEmbeddingModel(model) && !isRerankModel(model), [])
+
+  const normalizeModels = useCallback((models: Model[]) => {
+    const modelMap = new Map<string, Model>()
+    for (const model of models) {
+      const uniqId = getModelUniqId(model)
+      if (!uniqId) {
+        continue
+      }
+      if (!modelMap.has(uniqId)) {
+        modelMap.set(uniqId, model)
+      }
+    }
+    return [...modelMap.values()]
+  }, [])
+
+  const normalizeModelGroups = useCallback(
+    (groups: AssistantModelGroup[]) => {
+      const groupMap = new Map<string, AssistantModelGroup>()
+      for (const group of groups) {
+        if (!group?.id || groupMap.has(group.id)) {
+          continue
+        }
+        groupMap.set(group.id, {
+          ...group,
+          name: group.name?.trim() || 'Model Group',
+          models: normalizeModels(group.models ?? [])
+        })
+      }
+      return [...groupMap.values()]
+    },
+    [normalizeModels]
+  )
+
+  const modelGroups = useMemo(() => normalizeModelGroups(globalModelGroups), [globalModelGroups, normalizeModelGroups])
+
+  useEffect(() => {
+    if (!selectedModelGroupId) {
+      return
+    }
+
+    if (modelGroups.some((group) => group.id === selectedModelGroupId)) {
+      return
+    }
+
+    setSelectedModelGroupId(undefined)
+    updateAssistant({
+      ...assistant,
+      selectedModelGroupId: undefined,
+      candidateModels: undefined
+    })
+  }, [assistant, modelGroups, selectedModelGroupId, updateAssistant])
+
+  const persistModelGroups = useCallback(
+    (nextGroups: AssistantModelGroup[], nextSelectedGroupId: string | undefined = selectedModelGroupId) => {
+      const normalizedGroups = normalizeModelGroups(nextGroups)
+      const effectiveSelectedGroupId = normalizedGroups.some((group) => group.id === nextSelectedGroupId)
+        ? nextSelectedGroupId
+        : undefined
+
+      setGlobalModelGroups(normalizedGroups)
+      setSelectedModelGroupId(effectiveSelectedGroupId)
+
+      updateAssistant({
+        ...assistant,
+        selectedModelGroupId: effectiveSelectedGroupId,
+        modelGroupRoutingMode,
+        candidateModels: undefined
+      })
+    },
+    [
+      assistant,
+      modelGroupRoutingMode,
+      normalizeModelGroups,
+      selectedModelGroupId,
+      setGlobalModelGroups,
+      updateAssistant
+    ]
+  )
+
+  const onAddModelGroup = useCallback(() => {
+    const nextGroup: AssistantModelGroup = {
+      id: uuid(),
+      name: `Group ${modelGroups.length + 1}`,
+      models: []
+    }
+    persistModelGroups([...modelGroups, nextGroup])
+  }, [modelGroups, persistModelGroups])
+
+  const onUpdateModelGroupName = useCallback(
+    (groupId: string, name: string) => {
+      const nextGroups = modelGroups.map((group) => (group.id === groupId ? { ...group, name } : group))
+      persistModelGroups(nextGroups)
+    },
+    [modelGroups, persistModelGroups]
+  )
+
+  const onRemoveModelGroup = useCallback(
+    (groupId: string) => {
+      const nextGroups = modelGroups.filter((group) => group.id !== groupId)
+      const nextSelectedGroupId = selectedModelGroupId === groupId ? undefined : selectedModelGroupId
+      persistModelGroups(nextGroups, nextSelectedGroupId)
+    },
+    [modelGroups, persistModelGroups, selectedModelGroupId]
+  )
+
+  const onAddModelToGroup = useCallback(
+    async (groupId: string) => {
+      const selectedModel = await SelectModelPopup.show({
+        model: defaultModel ?? assistant?.model,
+        filter: modelFilter
+      })
+
+      if (!selectedModel) {
+        return
+      }
+
+      const nextGroups = modelGroups.map((group) =>
+        group.id === groupId ? { ...group, models: normalizeModels([...(group.models ?? []), selectedModel]) } : group
+      )
+
+      persistModelGroups(nextGroups)
+    },
+    [assistant, defaultModel, modelFilter, modelGroups, normalizeModels, persistModelGroups]
+  )
+
+  const onRemoveModelFromGroup = useCallback(
+    (groupId: string, model: Model) => {
+      const modelUniqId = getModelUniqId(model)
+      const nextGroups = modelGroups.map((group) =>
+        group.id === groupId
+          ? { ...group, models: group.models.filter((groupModel) => getModelUniqId(groupModel) !== modelUniqId) }
+          : group
+      )
+      persistModelGroups(nextGroups)
+    },
+    [modelGroups, persistModelGroups]
+  )
+
+  const onUseSingleModel = useCallback(() => {
+    setSelectedModelGroupId(undefined)
+    updateAssistant({
+      ...assistant,
+      selectedModelGroupId: undefined,
+      modelGroupRoutingMode,
+      candidateModels: undefined
+    })
+  }, [assistant, modelGroupRoutingMode, updateAssistant])
+
+  const onUseModelGroup = useCallback(
+    (groupId: string) => {
+      const previewModel = resolveAssistantDisplayModel(
+        {
+          ...assistant,
+          selectedModelGroupId: groupId,
+          modelGroupRoutingMode
+        },
+        defaultModel
+      )
+
+      setSelectedModelGroupId(groupId)
+      updateAssistant({
+        ...assistant,
+        model: previewModel ?? assistant.model,
+        selectedModelGroupId: groupId,
+        modelGroupRoutingMode,
+        candidateModels: undefined
+      })
+    },
+    [assistant, defaultModel, modelGroupRoutingMode, updateAssistant]
+  )
+
+  const onChangeModelGroupRoutingMode = useCallback(
+    (mode: ModelGroupRoutingMode) => {
+      setModelGroupRoutingMode(mode)
+      updateAssistant({
+        ...assistant,
+        modelGroupRoutingMode: mode
+      })
+    },
+    [assistant, updateAssistant]
+  )
 
   const onReset = () => {
     setTemperature(DEFAULT_ASSISTANT_SETTINGS.temperature)
@@ -195,17 +398,19 @@ const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateA
     setToolUseMode(DEFAULT_ASSISTANT_SETTINGS.toolUseMode)
     updateAssistantSettings(DEFAULT_ASSISTANT_SETTINGS)
   }
-  const modelFilter = (model: Model) => !isEmbeddingModel(model) && !isRerankModel(model)
 
   const onSelectModel = useCallback(async () => {
     const currentModel = defaultModel ? assistant?.model : undefined
     const selectedModel = await SelectModelPopup.show({ model: currentModel, filter: modelFilter })
     if (selectedModel) {
       setDefaultModel(selectedModel)
+      setSelectedModelGroupId(undefined)
       updateAssistant({
         ...assistant,
         model: selectedModel,
-        defaultModel: selectedModel
+        defaultModel: selectedModel,
+        selectedModelGroupId: undefined,
+        candidateModels: undefined
       })
       // TODO: 需要根据配置来设置默认值
       if (selectedModel.name.includes('kimi-k2')) {
@@ -216,7 +421,7 @@ const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateA
         setTimeoutTimer('onSelectModel_2', () => updateAssistantSettings({ temperature: 0.3 }), 500)
       }
     }
-  }, [assistant, defaultModel, setTimeoutTimer, updateAssistant, updateAssistantSettings])
+  }, [assistant, defaultModel, modelFilter, setTimeoutTimer, updateAssistant, updateAssistantSettings])
 
   useEffect(() => {
     return () => updateAssistantSettings({ customParameters: customParametersRef.current })
@@ -252,6 +457,102 @@ const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateA
           )}
         </HStack>
       </HStack>
+      <SettingRow style={{ minHeight: 30 }}>
+        <Label>Model Source</Label>
+        <Selector
+          value={selectedModelGroupId ? `group:${selectedModelGroupId}` : 'model'}
+          options={[
+            { label: 'Single Model', value: 'model' },
+            ...modelGroups.map((group) => ({
+              label: `Group: ${group.name}`,
+              value: `group:${group.id}`
+            }))
+          ]}
+          onChange={(value) => {
+            if (value === 'model') {
+              onUseSingleModel()
+              return
+            }
+            if (typeof value === 'string' && value.startsWith('group:')) {
+              onUseModelGroup(value.replace('group:', ''))
+            }
+          }}
+          size={14}
+        />
+      </SettingRow>
+      <SettingRow style={{ minHeight: 30 }}>
+        <Label>Group Routing</Label>
+        <Selector
+          value={modelGroupRoutingMode}
+          options={[
+            { label: 'Order First (failover)', value: 'order-first' },
+            { label: 'Round Robin', value: 'round-robin' }
+          ]}
+          onChange={(value) => onChangeModelGroupRoutingMode(value as ModelGroupRoutingMode)}
+          size={14}
+        />
+      </SettingRow>
+      <SettingRow style={{ minHeight: 30 }}>
+        <Label>Model Groups</Label>
+        <Button icon={<PlusIcon size={18} />} onClick={onAddModelGroup}>
+          Add Group
+        </Button>
+      </SettingRow>
+      {modelGroups.length > 0 && (
+        <ModelGroupList>
+          {modelGroups.map((group) => (
+            <ModelGroupCard key={group.id}>
+              <ModelGroupHeader>
+                <Input
+                  value={group.name}
+                  onChange={(event) => onUpdateModelGroupName(group.id, event.target.value)}
+                  placeholder="Group Name"
+                  size="small"
+                />
+                <HStack alignItems="center" gap={6}>
+                  <Button
+                    type={selectedModelGroupId === group.id ? 'primary' : 'default'}
+                    size="small"
+                    onClick={() => onUseModelGroup(group.id)}>
+                    Use
+                  </Button>
+                  <Button size="small" icon={<PlusIcon size={14} />} onClick={() => onAddModelToGroup(group.id)}>
+                    Add Model
+                  </Button>
+                  <Button
+                    color="danger"
+                    variant="filled"
+                    size="small"
+                    icon={<DeleteIcon size={14} className="lucide-custom" />}
+                    onClick={() => onRemoveModelGroup(group.id)}
+                  />
+                </HStack>
+              </ModelGroupHeader>
+              {group.models.length > 0 ? (
+                <CandidateList>
+                  {group.models.map((groupModel) => (
+                    <CandidateRow key={getModelUniqId(groupModel) ?? `${groupModel.provider}-${groupModel.id}`}>
+                      <HStack alignItems="center" gap={8} style={{ minWidth: 0 }}>
+                        <ModelAvatar model={groupModel} size={18} />
+                        <ModelName>{groupModel.name}</ModelName>
+                      </HStack>
+                      <Button
+                        color="danger"
+                        variant="filled"
+                        size="small"
+                        icon={<DeleteIcon size={14} className="lucide-custom" />}
+                        onClick={() => onRemoveModelFromGroup(group.id, groupModel)}
+                      />
+                    </CandidateRow>
+                  ))}
+                </CandidateList>
+              ) : (
+                <ModelGroupHint>No models in this group.</ModelGroupHint>
+              )}
+            </ModelGroupCard>
+          ))}
+        </ModelGroupList>
+      )}
       <Divider style={{ margin: '10px 0' }} />
 
       <SettingRow style={{ minHeight: 30 }}>
@@ -564,6 +865,50 @@ const ModelName = styled.span`
   text-overflow: ellipsis;
   white-space: nowrap;
   display: inline-block;
+`
+
+const CandidateList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+`
+
+const CandidateRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+`
+
+const ModelGroupList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+`
+
+const ModelGroupCard = styled.div`
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 10px;
+`
+
+const ModelGroupHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .ant-input {
+    flex: 1;
+  }
+`
+
+const ModelGroupHint = styled.div`
+  color: var(--color-text-2);
+  font-size: 12px;
+  margin-top: 8px;
 `
 
 const ContextSliderWrapper = styled.div`

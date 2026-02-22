@@ -8,6 +8,7 @@ import {
 } from '@renderer/config/models'
 import { db } from '@renderer/databases'
 import { getDefaultTopic } from '@renderer/services/AssistantService'
+import { resolveAssistantDisplayModel } from '@renderer/services/ModelCandidatesService'
 import { useAppDispatch, useAppSelector } from '@renderer/store'
 import {
   addAssistant,
@@ -78,7 +79,7 @@ export function useAssistant(id: string) {
   const dispatch = useAppDispatch()
   const { defaultModel } = useDefaultModel()
 
-  const model = useMemo(() => assistant?.model ?? assistant?.defaultModel ?? defaultModel, [assistant, defaultModel])
+  const model = useMemo(() => resolveAssistantDisplayModel(assistant, defaultModel), [assistant, defaultModel])
   if (!model) {
     throw new Error(`Assistant model is not set for assistant with name: ${assistant?.name ?? 'unknown'}`)
   }

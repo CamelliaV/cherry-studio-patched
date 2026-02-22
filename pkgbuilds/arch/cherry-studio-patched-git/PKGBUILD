@@ -1,0 +1,111 @@
+pkgname=cherry-studio-patched-git
+_pkgname=cherry-studio
+pkgver=1.7.19.r0.g0000000
+pkgrel=1
+pkgdesc='Patched Cherry Studio built from source'
+arch=('x86_64' 'aarch64')
+url='https://github.com/CamelliaV/cherry-studio-patched'
+license=('AGPL-3.0')
+depends=('alsa-lib' 'at-spi2-core' 'glib2' 'gtk3' 'libsecret' 'libx11' 'libxcb' 'libxss' 'nss' 'xdg-utils')
+makedepends=('git' 'nodejs>=22' 'python' 'make' 'gcc')
+optdepends=('pipewire: screen sharing support under Wayland')
+provides=('cherry-studio')
+conflicts=('cherry-studio' 'cherry-studio-bin')
+replaces=('cherry-studio' 'cherry-studio-bin')
+options=('!strip')
+
+source=(
+  "${_pkgname}-patched::git+https://github.com/CamelliaV/cherry-studio-patched.git"
+)
+sha256sums=('SKIP')
+
+_ensure_pnpm() {
+  if command -v pnpm >/dev/null 2>&1; then
+    return 0
+  fi
+  if ! command -v corepack >/dev/null 2>&1; then
+    echo 'pnpm not found and corepack is unavailable. Please install pnpm.' >&2
+    return 1
+  fi
+  corepack enable >/dev/null 2>&1 || true
+  corepack prepare pnpm@10.27.0 --activate
+}
+
+pkgver() {
+  cd "${srcdir}/${_pkgname}-patched"
+  local base_version commit_count short_hash
+  base_version="$(sed -nE 's/^[[:space:]]*"version":[[:space:]]*"([^"]+)".*/\1/p' package.json | head -n1)"
+  commit_count="$(git rev-list --count HEAD)"
+  short_hash="$(git rev-parse --short HEAD)"
+  printf '%s.r%s.g%s' "${base_version:-0.0.0}" "${commit_count}" "${short_hash}"
+}
+
+build() {
+  cd "${srcdir}/${_pkgname}-patched"
+  _ensure_pnpm
+  SHARP_IGNORE_GLOBAL_LIBVIPS=1 pnpm install --frozen-lockfile
+  pnpm exec dotenv npm run build
+
+  case "${CARCH}" in
+    x86_64) pnpm exec electron-builder --linux AppImage --x64 ;;
+    aarch64) pnpm exec electron-builder --linux AppImage --arm64 ;;
+    *)
+      echo "Unsupported architecture: ${CARCH}" >&2
+      return 1
+      ;;
+  esac
+}
+
+package() {
+  cd "${srcdir}/${_pkgname}-patched"
+  local appimage desktop_src icon_src
+
+  case "${CARCH}" in
+    x86_64)
+      appimage="$(find dist -maxdepth 1 -type f \( -name 'Cherry-Studio-*-x86_64.AppImage' -o -name 'Cherry-Studio-*-x64.AppImage' \) | sort -V | tail -n1)"
+      ;;
+    aarch64)
+      appimage="$(find dist -maxdepth 1 -type f -name 'Cherry-Studio-*-arm64.AppImage' | sort -V | tail -n1)"
+      ;;
+    *)
+      echo "Unsupported architecture: ${CARCH}" >&2
+      return 1
+      ;;
+  esac
+
+  if [[ -z "${appimage}" ]]; then
+    echo "AppImage not found in dist/. Build output may have failed." >&2
+    return 1
+  fi
+
+  chmod +x "${appimage}"
+  rm -rf squashfs-root
+  "${appimage}" --appimage-extract >/dev/null
+
+  install -d "${pkgdir}/opt/cherry-studio"
+  cp -a squashfs-root/. "${pkgdir}/opt/cherry-studio/"
+  chmod -R a+rX "${pkgdir}/opt/cherry-studio"
+  chmod 755 "${pkgdir}/opt/cherry-studio"
+  chmod 755 "${pkgdir}/opt/cherry-studio/AppRun"
+
+  install -d "${pkgdir}/usr/bin"
+  ln -s /opt/cherry-studio/AppRun "${pkgdir}/usr/bin/cherry-studio"
+
+  desktop_src="$(find squashfs-root -maxdepth 3 -type f -name '*.desktop' | head -n1)"
+  if [[ -n "${desktop_src}" ]]; then
+    install -Dm644 "${desktop_src}" "${pkgdir}/usr/share/applications/cherry-studio.desktop"
+    sed -i \
+      -e 's|^Exec=.*|Exec=cherry-studio %U|' \
+      -e 's|^Icon=.*|Icon=cherry-studio|' \
+      "${pkgdir}/usr/share/applications/cherry-studio.desktop"
+  fi
+
+  if [[ -f squashfs-root/.DirIcon ]]; then
+    install -Dm644 squashfs-root/.DirIcon "${pkgdir}/usr/share/pixmaps/cherry-studio.png"
+  else
+    icon_src="$(find squashfs-root -type f -name '*.png' | sort -V | tail -n1)"
+    if [[ -n "${icon_src}" ]]; then
+      install -Dm644 "${icon_src}" "${pkgdir}/usr/share/pixmaps/cherry-studio.png"
+    fi
+  fi
+}

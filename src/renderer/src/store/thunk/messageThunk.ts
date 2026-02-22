@@ -24,6 +24,10 @@ import { DbService } from '@renderer/services/db/DbService'
 import FileManager from '@renderer/services/FileManager'
 import { BlockManager } from '@renderer/services/messageStreaming/BlockManager'
 import { createCallbacks } from '@renderer/services/messageStreaming/callbacks'
+import {
+  getAssistantModelQueueConcurrency,
+  selectAssistantModelForRequest
+} from '@renderer/services/ModelCandidatesService'
 import { endSpan } from '@renderer/services/SpanManagerService'
 import { createStreamProcessor, type StreamProcessorCallbacks } from '@renderer/services/StreamProcessingService'
 import store from '@renderer/store'
@@ -46,7 +50,7 @@ import {
   resetAssistantMessage
 } from '@renderer/utils/messageUtils/create'
 import { getMainTextContent } from '@renderer/utils/messageUtils/find'
-import { getTopicQueue, waitForTopicQueue } from '@renderer/utils/queue'
+import { getTopicPendingRequestCount, setTopicQueueConcurrency, waitForTopicQueue } from '@renderer/utils/queue'
 import { IpcChannel } from '@shared/IpcChannel'
 import { defaultAppHeaders } from '@shared/utils'
 import type { TextStreamPart } from 'ai'
@@ -77,6 +81,25 @@ const finishTopicLoading = async (topicId: string) => {
   await waitForTopicQueue(topicId)
   store.dispatch(newMessagesActions.setTopicLoading({ topicId, loading: false }))
   store.dispatch(newMessagesActions.setTopicFulfilled({ topicId, fulfilled: true }))
+}
+
+const getQueueForAssistant = (topicId: string, assistant: Assistant, minConcurrency = 1) => {
+  const queueConcurrency = Math.max(minConcurrency, getAssistantModelQueueConcurrency(assistant))
+  const parallelQueueConcurrency = Math.max(queueConcurrency, getTopicPendingRequestCount(topicId) + 1)
+  return setTopicQueueConcurrency(topicId, parallelQueueConcurrency)
+}
+
+const getSelectedAssistantForRequest = (assistant: Assistant): Assistant => {
+  const selectedModel = selectAssistantModelForRequest(assistant) ?? assistant.model
+
+  if (!selectedModel) {
+    return assistant
+  }
+
+  return {
+    ...assistant,
+    model: selectedModel
+  }
 }
 
 type AgentSessionContext = {
@@ -407,6 +430,36 @@ const blockUpdateThrottlers = new LRUCache<string, ReturnType<typeof throttle>>(
 })
 
 /**
+ * 消息块持久化节流器。
+ * 将频繁的流式更新合并后再写入 DB，减少 IO 压力。
+ */
+const blockPersistThrottlers = new LRUCache<string, ReturnType<typeof throttle>>({
+  max: 100,
+  ttl: 1000 * 60 * 5,
+  updateAgeOnGet: true
+})
+
+/**
+ * 消息块持久化写入队列（按 block 串行）。
+ * 避免异步写入乱序导致旧内容覆盖新内容。
+ */
+const blockPersistWriteChains = new LRUCache<string, Promise<void>>({
+  max: 100,
+  ttl: 1000 * 60 * 5,
+  updateAgeOnGet: true
+})
+
+/**
+ * 消息块待持久化更新缓存。
+ * 仅保留每个 block 的最新增量，持久化时统一合并写入。
+ */
+const blockPendingPersistUpdates = new LRUCache<string, Partial<MessageBlock>>({
+  max: 100,
+  ttl: 1000 * 60 * 5,
+  updateAgeOnGet: true
+})
+
+/**
  * 消息块 RAF 缓存。
  * 用于管理 RAF 请求创建和取消。
  */
@@ -416,25 +469,103 @@ const blockUpdateRafs = new LRUCache<string, number>({
   updateAgeOnGet: true
 })
 
+const BLOCK_UI_THROTTLE_MS = 80
+const BLOCK_DB_THROTTLE_MS = 600
+
+const queueBlockPersistUpdate = (id: string, blockUpdate: Partial<MessageBlock>) => {
+  const pendingUpdate = blockPendingPersistUpdates.get(id)
+  const mergedUpdate = {
+    ...(pendingUpdate as Record<string, unknown> | undefined),
+    ...(blockUpdate as Record<string, unknown>)
+  } as Partial<MessageBlock>
+  blockPendingPersistUpdates.set(id, mergedUpdate)
+}
+
+const flushPendingBlockPersistUpdate = async (id: string) => {
+  const pendingUpdate = blockPendingPersistUpdates.get(id)
+  if (!pendingUpdate) {
+    return
+  }
+
+  blockPendingPersistUpdates.delete(id)
+
+  const latestBlock = store.getState().messageBlocks.entities[id]
+  if (!latestBlock) {
+    return
+  }
+
+  const isLatestTerminalStatus =
+    latestBlock.status === MessageBlockStatus.SUCCESS ||
+    latestBlock.status === MessageBlockStatus.ERROR ||
+    latestBlock.status === MessageBlockStatus.PAUSED
+
+  if (isLatestTerminalStatus && pendingUpdate.status !== latestBlock.status) {
+    return
+  }
+
+  const previousWrite = blockPersistWriteChains.get(id) || Promise.resolve()
+  const nextWrite = previousWrite
+    .catch(() => undefined)
+    .then(async () => {
+      try {
+        await updateSingleBlock(id, pendingUpdate)
+      } catch (error) {
+        logger.error(`[flushPendingBlockPersistUpdate] Failed to persist block ${id}:`, error as Error)
+      }
+    })
+  blockPersistWriteChains.set(id, nextWrite)
+  await nextWrite
+}
+
+/**
+ * 获取或创建消息块专用的持久化节流函数。
+ */
+const getBlockPersistThrottler = (id: string) => {
+  if (!blockPersistThrottlers.has(id)) {
+    const throttler = throttle(
+      () => {
+        void flushPendingBlockPersistUpdate(id)
+      },
+      BLOCK_DB_THROTTLE_MS,
+      {
+        leading: false,
+        trailing: true
+      }
+    )
+
+    blockPersistThrottlers.set(id, throttler)
+  }
+
+  return blockPersistThrottlers.get(id)!
+}
+
 /**
  * 获取或创建消息块专用的节流函数。
  */
 const getBlockThrottler = (id: string) => {
   if (!blockUpdateThrottlers.has(id)) {
-    const throttler = throttle(async (blockUpdate: any) => {
-      const existingRAF = blockUpdateRafs.get(id)
-      if (existingRAF) {
-        cancelAnimationFrame(existingRAF)
+    const throttler = throttle(
+      (blockUpdate: Partial<MessageBlock>) => {
+        const existingRAF = blockUpdateRafs.get(id)
+        if (existingRAF) {
+          cancelAnimationFrame(existingRAF)
+        }
+
+        const rafId = requestAnimationFrame(() => {
+          store.dispatch(updateOneBlock({ id, changes: blockUpdate }))
+          blockUpdateRafs.delete(id)
+        })
+
+        blockUpdateRafs.set(id, rafId)
+        queueBlockPersistUpdate(id, blockUpdate)
+        getBlockPersistThrottler(id)()
+      },
+      BLOCK_UI_THROTTLE_MS,
+      {
+        leading: true,
+        trailing: true
       }
-
-      const rafId = requestAnimationFrame(() => {
-        store.dispatch(updateOneBlock({ id, changes: blockUpdate }))
-        blockUpdateRafs.delete(id)
-      })
-
-      blockUpdateRafs.set(id, rafId)
-      await updateSingleBlock(id, blockUpdate)
-    }, 150)
+    )
 
     blockUpdateThrottlers.set(id, throttler)
   }
@@ -454,7 +585,7 @@ export const throttledBlockUpdate = (id: string, blockUpdate: any) => {
 /**
  * 取消单个块的节流更新，移除节流器和 RAF。
  */
-export const cancelThrottledBlockUpdate = (id: string) => {
+export const cancelThrottledBlockUpdate = (id: string, options?: { flushPersist?: boolean }) => {
   const rafId = blockUpdateRafs.get(id)
   if (rafId) {
     cancelAnimationFrame(rafId)
@@ -466,6 +597,19 @@ export const cancelThrottledBlockUpdate = (id: string) => {
     throttler.cancel()
     blockUpdateThrottlers.delete(id)
   }
+
+  const persistThrottler = blockPersistThrottlers.get(id)
+  if (persistThrottler) {
+    persistThrottler.cancel()
+    blockPersistThrottlers.delete(id)
+  }
+
+  if (options?.flushPersist) {
+    void flushPendingBlockPersistUpdate(id)
+  } else {
+    blockPendingPersistUpdates.delete(id)
+    blockPersistWriteChains.delete(id)
+  }
 }
 
 /**
@@ -473,7 +617,7 @@ export const cancelThrottledBlockUpdate = (id: string) => {
  */
 export const cleanupMultipleBlocks = (dispatch: AppDispatch, blockIds: string[]) => {
   blockIds.forEach((id) => {
-    cancelThrottledBlockUpdate(id)
+    cancelThrottledBlockUpdate(id, { flushPersist: false })
   })
 
   const getBlocksFiles = async (blockIds: string[]) => {
@@ -743,7 +887,7 @@ const dispatchMultiModelResponses = async (
     throw new Error(`Topic ${topicId} not found in DB.`)
   }
 
-  const queue = getTopicQueue(topicId)
+  const queue = getQueueForAssistant(topicId, assistant, mentionedModels.length || 1)
   for (const task of tasksToQueue) {
     queue.add(async () => {
       await fetchAndProcessAssistantResponseImpl(dispatch, getState, topicId, task.assistantConfig, task.messageStub)
@@ -902,9 +1046,8 @@ export const sendMessage =
       }
       dispatch(updateTopicUpdatedAt({ topicId }))
 
-      const queue = getTopicQueue(topicId)
-
       if (activeAgentSession) {
+        const queue = setTopicQueueConcurrency(topicId, 1)
         const assistantMessage = createAssistantMessage(assistant.id, topicId, {
           askId: userMessage.id,
           model: assistant.model,
@@ -931,16 +1074,27 @@ export const sendMessage =
         if (mentionedModels && mentionedModels.length > 0) {
           await dispatchMultiModelResponses(dispatch, getState, topicId, userMessage, assistant, mentionedModels)
         } else {
+          const assistantForRequest = getSelectedAssistantForRequest(assistant)
+          const assistantModelForRequest = assistantForRequest.model
+          const queue = getQueueForAssistant(topicId, assistant)
+
           const assistantMessage = createAssistantMessage(assistant.id, topicId, {
             askId: userMessage.id,
-            model: assistant.model,
+            model: assistantModelForRequest,
+            modelId: assistantModelForRequest?.id,
             traceId: userMessage.traceId
           })
           await saveMessageAndBlocksToDB(topicId, assistantMessage, [])
           dispatch(newMessagesActions.addMessage({ topicId, message: assistantMessage }))
 
           queue.add(async () => {
-            await fetchAndProcessAssistantResponseImpl(dispatch, getState, topicId, assistant, assistantMessage)
+            await fetchAndProcessAssistantResponseImpl(
+              dispatch,
+              getState,
+              topicId,
+              assistantForRequest,
+              assistantMessage
+            )
           })
         }
       }
@@ -1126,10 +1280,13 @@ export const resendMessageThunk =
 
       if (assistantMessagesToReset.length === 0 && !userMessageToResend?.mentions?.length) {
         // 没有相关的助手消息且没有提及模型时，使用助手模型创建一条消息
+        const assistantForRequest = getSelectedAssistantForRequest(assistant)
+        const assistantModelForRequest = assistantForRequest.model
 
         const assistantMessage = createAssistantMessage(assistant.id, topicId, {
           askId: userMessageToResend.id,
-          model: assistant.model
+          model: assistantModelForRequest,
+          modelId: assistantModelForRequest?.id
         })
         assistantMessage.traceId = userMessageToResend.traceId
         resetDataList.push(assistantMessage)
@@ -1147,7 +1304,7 @@ export const resendMessageThunk =
       for (const originalMsg of assistantMessagesToReset) {
         const modelToSet =
           assistantMessagesToReset.length === 1 && !userMessageToResend?.mentions?.length
-            ? assistant.model
+            ? (selectAssistantModelForRequest(assistant) ?? assistant.model)
             : originalMsg.model
         const blockIdsToDelete = [...(originalMsg.blocks || [])]
         const resetMsg = resetAssistantMessage(originalMsg, {
@@ -1188,7 +1345,7 @@ export const resendMessageThunk =
         logger.error('[resendMessageThunk] Error updating database:', dbError as Error)
       }
 
-      const queue = getTopicQueue(topicId)
+      const queue = getQueueForAssistant(topicId, assistant, resetDataList.length || 1)
       for (const resetMsg of resetDataList) {
         const assistantConfigForThisRegen = {
           ...assistant,
@@ -1269,6 +1426,7 @@ export const regenerateAssistantResponseThunk =
 
       // 4. Get Block IDs to delete
       const blockIdsToDelete = [...(messageToResetEntity.blocks || [])]
+      const selectedModelForRegeneration = selectAssistantModelForRequest(assistant) ?? assistant.model
 
       // 5. Reset the message entity in Redux
       const resetAssistantMsg = resetAssistantMessage(
@@ -1282,7 +1440,7 @@ export const regenerateAssistantResponseThunk =
           : {
               status: AssistantMessageStatus.PENDING,
               updatedAt: new Date().toISOString(),
-              model: assistant.model
+              model: selectedModelForRegeneration
             }
       )
 
@@ -1311,7 +1469,7 @@ export const regenerateAssistantResponseThunk =
       })
 
       // 8. Add fetch/process call to the queue
-      const queue = getTopicQueue(topicId)
+      const queue = getQueueForAssistant(topicId, assistant)
       const assistantConfigForRegen = {
         ...assistant,
         ...(resetAssistantMsg.model ? { model: resetAssistantMsg.model } : {})
@@ -1495,7 +1653,7 @@ export const appendAssistantResponseThunk =
         ...assistant,
         model: newModel
       }
-      const queue = getTopicQueue(topicId)
+      const queue = getQueueForAssistant(topicId, assistant)
       queue.add(async () => {
         await fetchAndProcessAssistantResponseImpl(
           dispatch,

@@ -496,6 +496,7 @@ const AgentSessionInputbarInner: FC<InnerProps> = ({ assistant, agentId, session
       handleSendMessage={sendMessage}
       leftToolbar={leftToolbar}
       forceEnableQuickPanelTriggers
+      allowSendWhileLoading
     />
   )
 }

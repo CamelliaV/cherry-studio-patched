@@ -19,7 +19,7 @@ import { createSlice } from '@reduxjs/toolkit'
 import { isLocalAi } from '@renderer/config/env'
 import { SYSTEM_MODELS } from '@renderer/config/models'
 import { SYSTEM_PROVIDERS } from '@renderer/config/providers'
-import type { AwsBedrockAuthType, Model, Provider } from '@renderer/types'
+import type { AssistantModelGroup, AwsBedrockAuthType, Model, Provider } from '@renderer/types'
 import { uniqBy } from 'lodash'
 
 type LlmSettings = {
@@ -60,6 +60,7 @@ export interface LlmState {
   topicNamingModel: Model
   quickModel: Model
   translateModel: Model
+  modelGroups?: AssistantModelGroup[]
   quickAssistantId: string
   settings: LlmSettings
 }
@@ -69,6 +70,7 @@ export const initialState: LlmState = {
   topicNamingModel: SYSTEM_MODELS.defaultModel[1],
   quickModel: SYSTEM_MODELS.defaultModel[1],
   translateModel: SYSTEM_MODELS.defaultModel[2],
+  modelGroups: [],
   quickAssistantId: '',
   providers: SYSTEM_PROVIDERS,
   settings: {
@@ -105,16 +107,20 @@ export const initialState: LlmState = {
 
 // 由于 isLocalAi 目前总是为false，该函数暂未被使用
 // 需要投入使用时，应当保证返回值类型满足 LlmState 要求，而不是使用类型断言
-const getIntegratedInitialState = () => {
-  const model = JSON.parse(import.meta.env.VITE_RENDERER_INTEGRATED_MODEL)
-
-  return {
-    defaultModel: model,
-    quickModel: model,
-    translateModel: model,
-    providers: [
-      {
+const getIntegratedInitialState = (): LlmState => {
+  const model = JSON.parse(import.meta.env.VITE_RENDERER_INTEGRATED_MODEL) as Model
+  const ollamaProvider = SYSTEM_PROVIDERS.find((provider) => provider.id === 'ollama')
+  const integratedProvider: Provider = ollamaProvider
+    ? {
+        ...ollamaProvider,
+        apiKey: 'ollama',
+        apiHost: 'http://localhost:15537/v1/',
+        models: [model],
+        enabled: true
+      }
+    : {
         id: 'ollama',
+        type: 'ollama',
         name: 'Ollama',
         apiKey: 'ollama',
         apiHost: 'http://localhost:15537/v1/',
@@ -122,8 +128,18 @@ const getIntegratedInitialState = () => {
         isSystem: true,
         enabled: true
       }
-    ],
+
+  return {
+    ...initialState,
+    defaultModel: model,
+    topicNamingModel: model,
+    quickModel: model,
+    translateModel: model,
+    modelGroups: [],
+    quickAssistantId: '',
+    providers: [integratedProvider],
     settings: {
+      ...initialState.settings,
       ollama: {
         keepAliveTime: 3600
       },
@@ -134,7 +150,7 @@ const getIntegratedInitialState = () => {
         keepAliveTime: 3600
       }
     }
-  } as LlmState
+  }
 }
 
 export const moveProvider = (providers: Provider[], id: string, position: number) => {
@@ -199,6 +215,9 @@ const llmSlice = createSlice({
     },
     setTranslateModel: (state, action: PayloadAction<{ model: Model }>) => {
       state.translateModel = action.payload.model
+    },
+    setModelGroups: (state, action: PayloadAction<AssistantModelGroup[]>) => {
+      state.modelGroups = action.payload
     },
 
     setQuickAssistantId: (state, action: PayloadAction<string>) => {
@@ -286,6 +305,7 @@ export const {
   setDefaultModel,
   setQuickModel,
   setTranslateModel,
+  setModelGroups,
   setQuickAssistantId,
   setOllamaKeepAliveTime,
   setLMStudioKeepAliveTime,

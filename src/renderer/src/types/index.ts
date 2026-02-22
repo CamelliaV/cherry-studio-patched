@@ -29,6 +29,14 @@ export * from './provider'
 
 export type McpMode = 'disabled' | 'auto' | 'manual'
 
+export type ModelGroupRoutingMode = 'order-first' | 'round-robin'
+
+export type AssistantModelGroup = {
+  id: string
+  name: string
+  models: Model[]
+}
+
 export type Assistant = {
   id: string
   name: string
@@ -39,6 +47,12 @@ export type Assistant = {
   emoji?: string
   description?: string
   model?: Model
+  /** @deprecated use global llm.modelGroups */
+  modelGroups?: AssistantModelGroup[]
+  selectedModelGroupId?: string
+  modelGroupRoutingMode?: ModelGroupRoutingMode
+  /** @deprecated use modelGroups instead */
+  candidateModels?: Model[]
   defaultModel?: Model
   // This field should be considered as not Partial and not optional in v2
   settings?: Partial<AssistantSettings>

@@ -1,0 +1,33 @@
+pkgbase = cherry-studio-patched-local
+	pkgdesc = Patched Cherry Studio built from the local working tree
+	pkgver = 1.7.19
+	pkgrel = 1
+	url = https://github.com/CamelliaV/cherry-studio-patched
+	arch = x86_64
+	arch = aarch64
+	license = AGPL-3.0
+	makedepends = nodejs>=22
+	makedepends = python
+	makedepends = make
+	makedepends = gcc
+	depends = alsa-lib
+	depends = at-spi2-core
+	depends = glib2
+	depends = gtk3
+	depends = libsecret
+	depends = libx11
+	depends = libxcb
+	depends = libxss
+	depends = nss
+	depends = xdg-utils
+	optdepends = pipewire: screen sharing support under Wayland
+	provides = cherry-studio
+	conflicts = cherry-studio
+	conflicts = cherry-studio-bin
+	conflicts = cherry-studio-patched-git
+	replaces = cherry-studio
+	replaces = cherry-studio-bin
+	replaces = cherry-studio-patched-git
+	options = !strip
+
+pkgname = cherry-studio-patched-local

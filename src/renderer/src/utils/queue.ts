@@ -3,6 +3,17 @@ import PQueue from 'p-queue'
 
 // Queue configuration - managed by topic
 const requestQueues: { [topicId: string]: PQueue } = {}
+type TopicQueueOptions = ConstructorParameters<typeof PQueue>[0]
+const DEFAULT_TOPIC_QUEUE_OPTIONS: TopicQueueOptions = {
+  concurrency: 1
+}
+const normalizeQueueConcurrency = (concurrency?: number) => {
+  if (!Number.isFinite(concurrency)) {
+    return DEFAULT_TOPIC_QUEUE_OPTIONS.concurrency!
+  }
+
+  return Math.max(1, Math.floor(concurrency as number))
+}
 
 /**
  * Get or create a queue for a specific topic
@@ -10,13 +21,28 @@ const requestQueues: { [topicId: string]: PQueue } = {}
  * @param options
  * @returns A PQueue instance for the topic
  */
-export const getTopicQueue = (topicId: string, options = {}): PQueue => {
+export const getTopicQueue = (topicId: string, options: TopicQueueOptions = {}): PQueue => {
   if (!requestQueues[topicId]) {
-    requestQueues[topicId] = new PQueue(options).addListener('idle', () => {
+    requestQueues[topicId] = new PQueue({ ...DEFAULT_TOPIC_QUEUE_OPTIONS, ...options }).addListener('idle', () => {
       endTrace({ topicId })
     })
   }
   return requestQueues[topicId]
+}
+
+/**
+ * Update queue concurrency for a specific topic.
+ * Creates queue when missing.
+ */
+export const setTopicQueueConcurrency = (topicId: string, concurrency: number): PQueue => {
+  const normalizedConcurrency = normalizeQueueConcurrency(concurrency)
+  const queue = getTopicQueue(topicId, { concurrency: normalizedConcurrency })
+
+  if (queue.concurrency !== normalizedConcurrency) {
+    queue.concurrency = normalizedConcurrency
+  }
+
+  return queue
 }
 
 /**

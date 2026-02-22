@@ -1,0 +1,29 @@
+pkgbase = cherry-studio-bin
+	pkgdesc = Desktop client that supports multiple LLM providers
+	pkgver = 1.7.19
+	pkgrel = 2
+	url = https://github.com/CherryHQ/cherry-studio
+	arch = x86_64
+	arch = aarch64
+	license = AGPL-3.0
+	depends = alsa-lib
+	depends = at-spi2-core
+	depends = glib2
+	depends = gtk3
+	depends = libsecret
+	depends = libx11
+	depends = libxcb
+	depends = libxss
+	depends = nss
+	depends = xdg-utils
+	optdepends = pipewire: screen sharing support under Wayland
+	provides = cherry-studio=1.7.19
+	conflicts = cherry-studio
+	replaces = cherry-studio
+	options = !strip
+	source_x86_64 = Cherry-Studio-1.7.19-x86_64.AppImage::https://github.com/CherryHQ/cherry-studio/releases/download/v1.7.19/Cherry-Studio-1.7.19-x86_64.AppImage
+	sha256sums_x86_64 = SKIP
+	source_aarch64 = Cherry-Studio-1.7.19-arm64.AppImage::https://github.com/CherryHQ/cherry-studio/releases/download/v1.7.19/Cherry-Studio-1.7.19-arm64.AppImage
+	sha256sums_aarch64 = SKIP
+
+pkgname = cherry-studio-bin

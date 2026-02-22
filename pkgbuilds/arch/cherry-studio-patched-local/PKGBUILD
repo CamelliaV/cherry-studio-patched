@@ -1,0 +1,124 @@
+pkgname=cherry-studio-patched-local
+pkgver=1.7.19
+pkgrel=1
+pkgdesc='Patched Cherry Studio built from the local working tree'
+arch=('x86_64' 'aarch64')
+url='https://github.com/CamelliaV/cherry-studio-patched'
+license=('AGPL-3.0')
+depends=('alsa-lib' 'at-spi2-core' 'glib2' 'gtk3' 'libsecret' 'libx11' 'libxcb' 'libxss' 'nss' 'xdg-utils')
+makedepends=('nodejs>=22' 'python' 'make' 'gcc')
+optdepends=('pipewire: screen sharing support under Wayland')
+provides=('cherry-studio')
+conflicts=('cherry-studio' 'cherry-studio-bin' 'cherry-studio-patched-git')
+replaces=('cherry-studio' 'cherry-studio-bin' 'cherry-studio-patched-git')
+options=('!strip')
+
+_repo_root="${startdir}/../../.."
+
+_ensure_pnpm() {
+  if command -v pnpm >/dev/null 2>&1; then
+    return 0
+  fi
+  if ! command -v corepack >/dev/null 2>&1; then
+    echo 'pnpm not found and corepack is unavailable. Please install pnpm.' >&2
+    return 1
+  fi
+  corepack enable >/dev/null 2>&1 || true
+  corepack prepare pnpm@10.27.0 --activate
+}
+
+_prepare_local_source() {
+  local entry name local_src
+  local_src="${srcdir}/cherry-studio-local-src"
+  rm -rf "${local_src}"
+  install -d "${local_src}"
+
+  shopt -s dotglob nullglob
+  for entry in "${_repo_root}"/* "${_repo_root}"/.[!.]* "${_repo_root}"/..?*; do
+    name="${entry##*/}"
+    case "${name}" in
+      .|..|.git|node_modules|dist|pkgbuilds)
+        continue
+        ;;
+    esac
+    cp -a "${entry}" "${local_src}/"
+  done
+  shopt -u dotglob nullglob
+}
+
+build() {
+  local local_src
+  local_src="${srcdir}/cherry-studio-local-src"
+  _prepare_local_source
+  cd "${local_src}"
+  _ensure_pnpm
+  SHARP_IGNORE_GLOBAL_LIBVIPS=1 pnpm install --frozen-lockfile
+  pnpm exec dotenv npm run build
+
+  case "${CARCH}" in
+    x86_64) pnpm exec electron-builder --linux AppImage --x64 ;;
+    aarch64) pnpm exec electron-builder --linux AppImage --arm64 ;;
+    *)
+      echo "Unsupported architecture: ${CARCH}" >&2
+      return 1
+      ;;
+  esac
+}
+
+package() {
+  local appimage desktop_src icon_src local_src
+  local_src="${srcdir}/cherry-studio-local-src"
+  local extract_dir="${srcdir}/squashfs-root"
+
+  case "${CARCH}" in
+    x86_64)
+      appimage="$(find "${local_src}/dist" -maxdepth 1 -type f \( -name 'Cherry-Studio-*-x86_64.AppImage' -o -name 'Cherry-Studio-*-x64.AppImage' \) | sort -V | tail -n1)"
+      ;;
+    aarch64)
+      appimage="$(find "${local_src}/dist" -maxdepth 1 -type f -name 'Cherry-Studio-*-arm64.AppImage' | sort -V | tail -n1)"
+      ;;
+    *)
+      echo "Unsupported architecture: ${CARCH}" >&2
+      return 1
+      ;;
+  esac
+
+  if [[ -z "${appimage}" ]]; then
+    echo "AppImage not found in ${local_src}/dist/. Build output may have failed." >&2
+    return 1
+  fi
+
+  chmod +x "${appimage}"
+  rm -rf "${extract_dir}"
+  (
+    cd "${srcdir}"
+    "${appimage}" --appimage-extract >/dev/null
+  )
+
+  install -d "${pkgdir}/opt/cherry-studio"
+  cp -a "${extract_dir}/." "${pkgdir}/opt/cherry-studio/"
+  chmod -R a+rX "${pkgdir}/opt/cherry-studio"
+  chmod 755 "${pkgdir}/opt/cherry-studio"
+  chmod 755 "${pkgdir}/opt/cherry-studio/AppRun"
+
+  install -d "${pkgdir}/usr/bin"
+  ln -s /opt/cherry-studio/AppRun "${pkgdir}/usr/bin/cherry-studio"
+
+  desktop_src="$(find "${extract_dir}" -maxdepth 3 -type f -name '*.desktop' | head -n1)"
+  if [[ -n "${desktop_src}" ]]; then
+    install -Dm644 "${desktop_src}" "${pkgdir}/usr/share/applications/cherry-studio.desktop"
+    sed -i \
+      -e 's|^Exec=.*|Exec=cherry-studio %U|' \
+      -e 's|^Icon=.*|Icon=cherry-studio|' \
+      "${pkgdir}/usr/share/applications/cherry-studio.desktop"
+  fi
+
+  if [[ -f "${extract_dir}/.DirIcon" ]]; then
+    install -Dm644 "${extract_dir}/.DirIcon" "${pkgdir}/usr/share/pixmaps/cherry-studio.png"
+  else
+    icon_src="$(find "${extract_dir}" -type f -name '*.png' | sort -V | tail -n1)"
+    if [[ -n "${icon_src}" ]]; then
+      install -Dm644 "${icon_src}" "${pkgdir}/usr/share/pixmaps/cherry-studio.png"
+    fi
+  fi
+}

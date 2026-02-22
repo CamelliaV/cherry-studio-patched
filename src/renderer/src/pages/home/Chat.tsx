@@ -1,3 +1,4 @@
+import { CloseOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { loggerService } from '@logger'
 import type { ContentSearchRef } from '@renderer/components/ContentSearch'
 import { ContentSearch } from '@renderer/components/ContentSearch'
@@ -18,10 +19,10 @@ import type { Assistant, Topic } from '@renderer/types'
 import { classNames } from '@renderer/utils'
 import { buildAgentSessionTopicId } from '@renderer/utils/agentSession'
 import { Alert, Flex } from 'antd'
-import { debounce } from 'lodash'
+import { debounce, throttle } from 'lodash'
 import { AnimatePresence, motion } from 'motion/react'
 import type { FC } from 'react'
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useTranslation } from 'react-i18next'
 import styled from 'styled-components'
@@ -36,12 +37,38 @@ import Messages from './Messages/Messages'
 import Tabs from './Tabs'
 
 const logger = loggerService.withContext('Chat')
+const CONVERSATION_TABS_HEIGHT = 54
+const CONVERSATION_TABS_SCROLL_KEY = 'home:conversation-tabs:scroll-left:v1'
 
 interface Props {
   assistant: Assistant
   activeTopic: Topic
   setActiveTopic: (topic: Topic) => void
   setActiveAssistant: (assistant: Assistant) => void
+  conversationTabs: ConversationTabItem[]
+  activeConversationTabId: string
+  workspaces: ConversationWorkspaceItem[]
+  activeWorkspaceId: string
+  onWorkspaceSelect: (workspaceId: string) => void
+  onWorkspaceCreate: () => void
+  onWorkspaceRename: (workspaceId: string, workspaceName: string) => void
+  onWorkspaceDelete: (workspaceId: string) => void
+  onConversationTabSelect: (assistantId: string, topicId: string) => void
+  onConversationTabClose: (assistantId: string, topicId: string) => void
+}
+
+interface ConversationTabItem {
+  id: string
+  assistantId: string
+  topicId: string
+  assistantName: string
+  topicName: string
+}
+
+interface ConversationWorkspaceItem {
+  id: string
+  name: string
+  tabCount: number
 }
 
 const Chat: FC<Props> = (props) => {
@@ -60,6 +87,7 @@ const Chat: FC<Props> = (props) => {
 
   const mainRef = React.useRef<HTMLDivElement>(null)
   const contentSearchRef = React.useRef<ContentSearchRef>(null)
+  const conversationTabsRef = React.useRef<HTMLDivElement>(null)
   const [filterIncludeUser, setFilterIncludeUser] = useState(false)
 
   const { setTimeoutTimer } = useTimer()
@@ -161,6 +189,88 @@ const Chat: FC<Props> = (props) => {
   }
 
   const mainHeight = isTopNavbar ? 'calc(100vh - var(--navbar-height) - 6px)' : 'calc(100vh - var(--navbar-height))'
+  const showWorkspaceSwitcher = activeTopicOrSession === 'topic' && props.workspaces.length > 0
+  const showConversationTabs = activeTopicOrSession === 'topic' && props.conversationTabs.length > 0
+  const activeWorkspace = useMemo(
+    () => props.workspaces.find((workspace) => workspace.id === props.activeWorkspaceId),
+    [props.activeWorkspaceId, props.workspaces]
+  )
+
+  const persistConversationTabsScroll = useMemo(
+    () =>
+      throttle((scrollLeft: number) => {
+        window.localStorage.setItem(CONVERSATION_TABS_SCROLL_KEY, String(scrollLeft))
+      }, 120),
+    []
+  )
+
+  const restoreConversationTabsScroll = useCallback(() => {
+    const rawScrollLeft = window.localStorage.getItem(CONVERSATION_TABS_SCROLL_KEY)
+    if (!rawScrollLeft || !conversationTabsRef.current) {
+      return
+    }
+
+    const scrollLeft = Number(rawScrollLeft)
+    if (!Number.isFinite(scrollLeft) || scrollLeft < 0) {
+      return
+    }
+
+    conversationTabsRef.current.scrollTo({ left: scrollLeft })
+  }, [])
+
+  const handleConversationTabsScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      persistConversationTabsScroll(event.currentTarget.scrollLeft)
+    },
+    [persistConversationTabsScroll]
+  )
+
+  useEffect(() => {
+    return () => {
+      persistConversationTabsScroll.flush()
+      persistConversationTabsScroll.cancel()
+    }
+  }, [persistConversationTabsScroll])
+
+  useEffect(() => {
+    if (!showConversationTabs) {
+      return
+    }
+
+    requestAnimationFrame(restoreConversationTabsScroll)
+    setTimeoutTimer('chat:restoreConversationTabsScroll', restoreConversationTabsScroll, 80)
+  }, [props.conversationTabs.length, restoreConversationTabsScroll, setTimeoutTimer, showConversationTabs])
+
+  const handleRenameWorkspace = useCallback(async () => {
+    if (!activeWorkspace) {
+      return
+    }
+
+    const workspaceName = await PromptPopup.show({
+      title: t('common.rename'),
+      message: '',
+      defaultValue: activeWorkspace.name
+    })
+    const nextWorkspaceName = workspaceName?.trim()
+    if (!nextWorkspaceName || nextWorkspaceName === activeWorkspace.name) {
+      return
+    }
+
+    props.onWorkspaceRename(activeWorkspace.id, nextWorkspaceName)
+  }, [activeWorkspace, props, t])
+
+  const handleDeleteWorkspace = useCallback(() => {
+    if (!activeWorkspace || props.workspaces.length <= 1) {
+      return
+    }
+
+    window.modal.confirm({
+      title: t('common.delete'),
+      content: activeWorkspace.name,
+      centered: true,
+      onOk: () => props.onWorkspaceDelete(activeWorkspace.id)
+    })
+  }, [activeWorkspace, props, t])
 
   // TODO: more info
   const AgentInvalid = useCallback(() => {
@@ -191,57 +301,145 @@ const Chat: FC<Props> = (props) => {
             justify="space-between"
             style={{ height: mainHeight, width: '100%' }}>
             <QuickPanelProvider>
-              <ChatNavbar
-                activeAssistant={props.assistant}
-                activeTopic={props.activeTopic}
-                setActiveTopic={props.setActiveTopic}
-                setActiveAssistant={props.setActiveAssistant}
-                position="left"
-              />
-              <div
-                className="flex flex-1 flex-col justify-between"
-                style={{ height: `calc(${mainHeight} - var(--navbar-height))` }}>
-                {activeTopicOrSession === 'topic' && (
-                  <>
-                    <Messages
-                      key={props.activeTopic.id}
-                      assistant={assistant}
-                      topic={props.activeTopic}
-                      setActiveTopic={props.setActiveTopic}
-                      onComponentUpdate={messagesComponentUpdateHandler}
-                      onFirstUpdate={messagesComponentFirstUpdateHandler}
-                    />
-                    <ContentSearch
-                      ref={contentSearchRef}
-                      searchTarget={mainRef as React.RefObject<HTMLElement>}
-                      filter={contentSearchFilter}
-                      includeUser={filterIncludeUser}
-                      onIncludeUserChange={userOutlinedItemClickHandler}
-                    />
-                    {messageNavigation === 'buttons' && <ChatNavigation containerId="messages" />}
-                    <Inputbar assistant={assistant} setActiveTopic={props.setActiveTopic} topic={props.activeTopic} />
-                  </>
+              <MainContent>
+                <ChatNavbar
+                  activeAssistant={props.assistant}
+                  activeTopic={props.activeTopic}
+                  setActiveTopic={props.setActiveTopic}
+                  setActiveAssistant={props.setActiveAssistant}
+                  position="left"
+                />
+                {showWorkspaceSwitcher && (
+                  <WorkspaceSwitcherContainer>
+                    <WorkspaceSelect
+                      value={props.activeWorkspaceId}
+                      onChange={(event) => props.onWorkspaceSelect(event.currentTarget.value)}
+                      aria-label="Conversation workspace">
+                      {props.workspaces.map((workspace) => (
+                        <option key={workspace.id} value={workspace.id}>
+                          {workspace.name} ({workspace.tabCount})
+                        </option>
+                      ))}
+                    </WorkspaceSelect>
+                    <WorkspaceActions>
+                      <WorkspaceActionButton
+                        type="button"
+                        aria-label={t('common.add')}
+                        title={t('common.add')}
+                        onClick={props.onWorkspaceCreate}>
+                        <PlusOutlined />
+                      </WorkspaceActionButton>
+                      <WorkspaceActionButton
+                        type="button"
+                        aria-label={t('common.rename')}
+                        title={t('common.rename')}
+                        onClick={handleRenameWorkspace}
+                        disabled={!activeWorkspace}>
+                        <EditOutlined />
+                      </WorkspaceActionButton>
+                      <WorkspaceActionButton
+                        type="button"
+                        aria-label={t('common.delete')}
+                        title={t('common.delete')}
+                        onClick={handleDeleteWorkspace}
+                        disabled={!activeWorkspace || props.workspaces.length <= 1}>
+                        <DeleteOutlined />
+                      </WorkspaceActionButton>
+                    </WorkspaceActions>
+                  </WorkspaceSwitcherContainer>
                 )}
-                {activeTopicOrSession === 'session' && !activeAgentId && <AgentInvalid />}
-                {activeTopicOrSession === 'session' && activeAgentId && !activeSessionId && <SessionInvalid />}
-                {activeTopicOrSession === 'session' && activeAgentId && activeSessionId && (
-                  <>
-                    {!apiServer.enabled ? (
-                      <Alert type="warning" message={t('agent.warning.enable_server')} style={{ margin: '5px 16px' }} />
-                    ) : (
-                      <>
-                        <AgentSessionMessages agentId={activeAgentId} sessionId={activeSessionId} />
-                        <PinnedTodoPanelWrapper>
-                          <PinnedTodoPanel topicId={buildAgentSessionTopicId(activeSessionId)} />
-                        </PinnedTodoPanelWrapper>
-                      </>
-                    )}
-                    {messageNavigation === 'buttons' && <ChatNavigation containerId="messages" />}
-                    <AgentSessionInputbar agentId={activeAgentId} sessionId={activeSessionId} />
-                  </>
+                {showConversationTabs && (
+                  <ConversationTabsContainer ref={conversationTabsRef} onScroll={handleConversationTabsScroll}>
+                    {props.conversationTabs.map((tab) => {
+                      const isActive = tab.id === props.activeConversationTabId
+
+                      return (
+                        <ConversationTabButton
+                          key={tab.id}
+                          type="button"
+                          $active={isActive}
+                          onMouseDown={(event) => {
+                            if (event.button !== 1 || props.conversationTabs.length <= 1) {
+                              return
+                            }
+                            event.preventDefault()
+                          }}
+                          onAuxClick={(event) => {
+                            if (event.button !== 1 || props.conversationTabs.length <= 1) {
+                              return
+                            }
+                            event.preventDefault()
+                            event.stopPropagation()
+                            props.onConversationTabClose(tab.assistantId, tab.topicId)
+                          }}
+                          onClick={() => props.onConversationTabSelect(tab.assistantId, tab.topicId)}>
+                          <ConversationTabText>
+                            <ConversationTabTitle>{tab.topicName || tab.topicId}</ConversationTabTitle>
+                            <ConversationTabMeta>{tab.assistantName}</ConversationTabMeta>
+                          </ConversationTabText>
+                          {props.conversationTabs.length > 1 && (
+                            <ConversationTabClose
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                props.onConversationTabClose(tab.assistantId, tab.topicId)
+                              }}
+                              aria-label={t('chat.navigation.close')}>
+                              <CloseOutlined />
+                            </ConversationTabClose>
+                          )}
+                        </ConversationTabButton>
+                      )
+                    })}
+                  </ConversationTabsContainer>
                 )}
-                {isMultiSelectMode && <MultiSelectActionPopup topic={props.activeTopic} />}
-              </div>
+                <div className="flex min-h-0 flex-1 flex-col justify-between">
+                  {activeTopicOrSession === 'topic' && (
+                    <>
+                      <Messages
+                        key={props.activeTopic.id}
+                        assistant={assistant}
+                        topic={props.activeTopic}
+                        setActiveTopic={props.setActiveTopic}
+                        onComponentUpdate={messagesComponentUpdateHandler}
+                        onFirstUpdate={messagesComponentFirstUpdateHandler}
+                      />
+                      <ContentSearch
+                        ref={contentSearchRef}
+                        searchTarget={mainRef as React.RefObject<HTMLElement>}
+                        filter={contentSearchFilter}
+                        includeUser={filterIncludeUser}
+                        onIncludeUserChange={userOutlinedItemClickHandler}
+                      />
+                      {messageNavigation === 'buttons' && <ChatNavigation containerId="messages" />}
+                      <Inputbar assistant={assistant} setActiveTopic={props.setActiveTopic} topic={props.activeTopic} />
+                    </>
+                  )}
+                  {activeTopicOrSession === 'session' && !activeAgentId && <AgentInvalid />}
+                  {activeTopicOrSession === 'session' && activeAgentId && !activeSessionId && <SessionInvalid />}
+                  {activeTopicOrSession === 'session' && activeAgentId && activeSessionId && (
+                    <>
+                      {!apiServer.enabled ? (
+                        <Alert
+                          type="warning"
+                          message={t('agent.warning.enable_server')}
+                          style={{ margin: '5px 16px' }}
+                        />
+                      ) : (
+                        <>
+                          <AgentSessionMessages agentId={activeAgentId} sessionId={activeSessionId} />
+                          <PinnedTodoPanelWrapper>
+                            <PinnedTodoPanel topicId={buildAgentSessionTopicId(activeSessionId)} />
+                          </PinnedTodoPanelWrapper>
+                        </>
+                      )}
+                      {messageNavigation === 'buttons' && <ChatNavigation containerId="messages" />}
+                      <AgentSessionInputbar agentId={activeAgentId} sessionId={activeSessionId} />
+                    </>
+                  )}
+                  {isMultiSelectMode && <MultiSelectActionPopup topic={props.activeTopic} />}
+                </div>
+              </MainContent>
             </QuickPanelProvider>
           </Main>
         </motion.div>
@@ -291,6 +489,187 @@ const Main = styled(Flex)`
   }
   transform: translateZ(0);
   position: relative;
+`
+
+const MainContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+`
+
+const WorkspaceSwitcherContainer = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 58%, transparent);
+  background: transparent;
+  min-height: 42px;
+  max-height: 42px;
+  position: relative;
+  z-index: 2;
+`
+
+const WorkspaceSelect = styled.select`
+  flex: 1;
+  min-width: 0;
+  max-width: 380px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  background: color-mix(in srgb, var(--color-background) 22%, transparent);
+  color: var(--color-text);
+  padding: 0 10px;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s ease;
+
+  &:focus {
+    border-color: color-mix(in srgb, var(--color-primary) 58%, transparent);
+  }
+`
+
+const WorkspaceActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+`
+
+const WorkspaceActionButton = styled.button`
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 56%, transparent);
+  background: transparent;
+  color: color-mix(in srgb, var(--color-text) 75%, transparent);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+
+  &:hover:not(:disabled) {
+    color: var(--color-text);
+    border-color: color-mix(in srgb, var(--color-primary) 52%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 32%, transparent);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+`
+
+const ConversationTabsContainer = styled.div`
+  display: flex;
+  align-items: center;
+  flex: 0 0 ${CONVERSATION_TABS_HEIGHT}px;
+  gap: 12px;
+  padding: 8px 16px;
+  min-height: ${CONVERSATION_TABS_HEIGHT}px;
+  max-height: ${CONVERSATION_TABS_HEIGHT}px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 62%, transparent);
+  background: transparent;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  position: relative;
+  z-index: 2;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+`
+
+const ConversationTabButton = styled.button<{ $active: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-width: 240px;
+  max-width: 420px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid
+    ${(props) =>
+      props.$active
+        ? 'color-mix(in srgb, var(--color-primary) 62%, transparent)'
+        : 'color-mix(in srgb, var(--color-border) 55%, transparent)'};
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+  box-shadow: ${(props) =>
+    props.$active ? '0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, transparent)' : 'none'};
+  scroll-snap-align: start;
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--color-primary) 42%, transparent);
+    background: transparent;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 28%, transparent);
+  }
+`
+
+const ConversationTabText = styled.span`
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+`
+
+const ConversationTabTitle = styled.span`
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+`
+
+const ConversationTabMeta = styled.span`
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: color-mix(in srgb, var(--color-text) 72%, transparent);
+`
+
+const ConversationTabClose = styled.button`
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: color-mix(in srgb, var(--color-text) 66%, transparent);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+
+  &:hover {
+    color: var(--color-text);
+    background: transparent;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 38%, transparent);
+  }
 `
 
 const PinnedTodoPanelWrapper = styled.div`

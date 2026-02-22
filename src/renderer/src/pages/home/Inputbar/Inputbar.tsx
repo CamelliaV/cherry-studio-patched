@@ -512,6 +512,7 @@ const InputbarInner: FC<InputbarInnerProps> = ({ assistant: initialAssistant, se
       leftToolbar={leftToolbar}
       rightToolbar={rightToolbar}
       topContent={topContent}
+      allowSendWhileLoading
     />
   )
 }

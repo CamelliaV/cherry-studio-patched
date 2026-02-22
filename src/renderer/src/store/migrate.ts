@@ -41,6 +41,7 @@ import { DEFAULT_ASSISTANT_SETTINGS } from '@renderer/services/AssistantService'
 import { defaultPreprocessProviders } from '@renderer/store/preprocess'
 import type {
   Assistant,
+  AssistantModelGroup,
   BuiltinOcrProvider,
   Model,
   Provider,
@@ -233,6 +234,90 @@ function addPreprocessProviders(state: RootState, id: string) {
       if (provider) {
         state.preprocess.providers.push({ ...provider })
       }
+    }
+  }
+}
+
+const normalizeMigratedModelGroup = (group: AssistantModelGroup | undefined): AssistantModelGroup | undefined => {
+  if (!group?.id) {
+    return undefined
+  }
+
+  const id = group.id.trim()
+  if (!id) {
+    return undefined
+  }
+
+  const modelsMap = new Map<string, Model>()
+  for (const model of group.models ?? []) {
+    if (!model?.id || !model?.provider) {
+      continue
+    }
+    const modelKey = `${model.provider}:${model.id}`
+    if (!modelsMap.has(modelKey)) {
+      modelsMap.set(modelKey, model)
+    }
+  }
+
+  return {
+    id,
+    name: group.name?.trim() || 'Model Group',
+    models: [...modelsMap.values()]
+  }
+}
+
+const mergeAssistantModelGroupsToGlobal = (state: RootState) => {
+  const allAssistants: Assistant[] = [state.assistants.defaultAssistant, ...state.assistants.assistants]
+  const mergedGroups = new Map<string, AssistantModelGroup>()
+
+  const mergeGroup = (group: AssistantModelGroup | undefined) => {
+    const normalizedGroup = normalizeMigratedModelGroup(group)
+    if (!normalizedGroup) {
+      return
+    }
+
+    const existingGroup = mergedGroups.get(normalizedGroup.id)
+    if (!existingGroup) {
+      mergedGroups.set(normalizedGroup.id, normalizedGroup)
+      return
+    }
+
+    const modelsMap = new Map<string, Model>()
+    for (const existingModel of existingGroup.models) {
+      modelsMap.set(`${existingModel.provider}:${existingModel.id}`, existingModel)
+    }
+    for (const model of normalizedGroup.models) {
+      const key = `${model.provider}:${model.id}`
+      if (!modelsMap.has(key)) {
+        modelsMap.set(key, model)
+      }
+    }
+
+    mergedGroups.set(normalizedGroup.id, {
+      id: normalizedGroup.id,
+      name: existingGroup.name?.trim() || normalizedGroup.name,
+      models: [...modelsMap.values()]
+    })
+  }
+
+  for (const group of state.llm.modelGroups ?? []) {
+    mergeGroup(group)
+  }
+  for (const assistant of allAssistants) {
+    for (const group of assistant.modelGroups ?? []) {
+      mergeGroup(group)
+    }
+  }
+
+  state.llm.modelGroups = [...mergedGroups.values()]
+
+  const validGroupIds = new Set(state.llm.modelGroups.map((group) => group.id))
+  for (const assistant of allAssistants) {
+    if (assistant.selectedModelGroupId && !validGroupIds.has(assistant.selectedModelGroupId)) {
+      assistant.selectedModelGroupId = undefined
+    }
+    if (assistant.modelGroups) {
+      delete assistant.modelGroups
     }
   }
 }
@@ -3242,6 +3327,16 @@ const migrateConfig = {
       return state
     } catch (error) {
       logger.error('migrate 198 error', error as Error)
+      return state
+    }
+  },
+  '199': (state: RootState) => {
+    try {
+      mergeAssistantModelGroupsToGlobal(state)
+      logger.info('migrate 199 success')
+      return state
+    } catch (error) {
+      logger.error('migrate 199 error', error as Error)
       return state
     }
   }

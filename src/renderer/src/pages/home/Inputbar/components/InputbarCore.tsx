@@ -56,6 +56,7 @@ export interface InputbarCoreProps {
 
   supportedExts: string[]
   isLoading: boolean
+  allowSendWhileLoading?: boolean
 
   onPause?: () => void
   handleSendMessage: () => void
@@ -115,6 +116,7 @@ export const InputbarCore: FC<InputbarCoreProps> = ({
   onHeightChange,
   supportedExts,
   isLoading,
+  allowSendWhileLoading = false,
   onPause,
   handleSendMessage,
   leftToolbar,
@@ -188,8 +190,8 @@ export const InputbarCore: FC<InputbarCoreProps> = ({
   })
   // 判断是否有内容：文本不为空或有文件
   const noContent = isEmpty && files.length === 0
-  // 发送入口统一禁用条件：空内容、正在生成、全局搜索态
-  const isSendDisabled = noContent || isLoading || searching
+  // 发送入口统一禁用条件：空内容、全局搜索态，以及在不允许时的加载状态
+  const isSendDisabled = noContent || searching || (!allowSendWhileLoading && isLoading)
 
   useEffect(() => {
     setExtensions(supportedExts)

@@ -1,0 +1,72 @@
+pkgname=cherry-studio-bin
+pkgver=1.7.19
+pkgrel=2
+pkgdesc='Desktop client that supports multiple LLM providers'
+arch=('x86_64' 'aarch64')
+url='https://github.com/CherryHQ/cherry-studio'
+license=('AGPL-3.0')
+depends=('alsa-lib' 'at-spi2-core' 'glib2' 'gtk3' 'libsecret' 'libx11' 'libxcb' 'libxss' 'nss' 'xdg-utils')
+optdepends=('pipewire: screen sharing support under Wayland')
+provides=("cherry-studio=${pkgver}")
+conflicts=('cherry-studio')
+replaces=('cherry-studio')
+options=('!strip')
+
+source_x86_64=(
+  "Cherry-Studio-${pkgver}-x86_64.AppImage::https://github.com/CherryHQ/cherry-studio/releases/download/v${pkgver}/Cherry-Studio-${pkgver}-x86_64.AppImage"
+)
+source_aarch64=(
+  "Cherry-Studio-${pkgver}-arm64.AppImage::https://github.com/CherryHQ/cherry-studio/releases/download/v${pkgver}/Cherry-Studio-${pkgver}-arm64.AppImage"
+)
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+_appimage_name() {
+  case "${CARCH}" in
+    x86_64) echo "Cherry-Studio-${pkgver}-x86_64.AppImage" ;;
+    aarch64) echo "Cherry-Studio-${pkgver}-arm64.AppImage" ;;
+    *) return 1 ;;
+  esac
+}
+
+prepare() {
+  local appimage
+  appimage="$(_appimage_name)"
+
+  chmod +x "${appimage}"
+  rm -rf squashfs-root
+  "./${appimage}" --appimage-extract >/dev/null
+}
+
+package() {
+  local desktop_src
+  local icon_src
+
+  install -d "${pkgdir}/opt/cherry-studio"
+  cp -a squashfs-root/. "${pkgdir}/opt/cherry-studio/"
+  # AppImage squashfs metadata can mark top-level dirs as 700; normalize runtime permissions for all users.
+  chmod -R a+rX "${pkgdir}/opt/cherry-studio"
+  chmod 755 "${pkgdir}/opt/cherry-studio"
+  chmod 755 "${pkgdir}/opt/cherry-studio/AppRun"
+
+  install -d "${pkgdir}/usr/bin"
+  ln -s /opt/cherry-studio/AppRun "${pkgdir}/usr/bin/cherry-studio"
+
+  desktop_src="$(find squashfs-root -maxdepth 3 -type f -name '*.desktop' | head -n1)"
+  if [[ -n "${desktop_src}" ]]; then
+    install -Dm644 "${desktop_src}" "${pkgdir}/usr/share/applications/cherry-studio.desktop"
+    sed -i \
+      -e 's|^Exec=.*|Exec=cherry-studio %U|' \
+      -e 's|^Icon=.*|Icon=cherry-studio|' \
+      "${pkgdir}/usr/share/applications/cherry-studio.desktop"
+  fi
+
+  if [[ -f squashfs-root/.DirIcon ]]; then
+    install -Dm644 squashfs-root/.DirIcon "${pkgdir}/usr/share/pixmaps/cherry-studio.png"
+  else
+    icon_src="$(find squashfs-root -type f -name '*.png' | sort -V | tail -n1)"
+    if [[ -n "${icon_src}" ]]; then
+      install -Dm644 "${icon_src}" "${pkgdir}/usr/share/pixmaps/cherry-studio.png"
+    fi
+  fi
+}

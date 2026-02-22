@@ -7,11 +7,12 @@ import {
   addProvider,
   removeModel,
   removeProvider,
+  setModelGroups,
   updateModel,
   updateProvider,
   updateProviders
 } from '@renderer/store/llm'
-import type { Assistant, Model, Provider } from '@renderer/types'
+import type { Assistant, AssistantModelGroup, Model, Provider } from '@renderer/types'
 import { isSystemProvider } from '@renderer/types'
 import { withoutTrailingSlash } from '@renderer/utils/api'
 import { useMemo } from 'react'
@@ -51,6 +52,7 @@ const selectAllProviders = createSelector(selectProviders, (providers) => provid
 const selectAllProvidersWithCherryAI = createSelector(selectProviders, (providers) =>
   [...providers, CHERRYAI_PROVIDER].map(normalizeProvider)
 )
+const selectModelGroups = (state: RootState) => state.llm.modelGroups ?? []
 
 export function useProviders() {
   const providers: Provider[] = useAppSelector(selectEnabledProviders)
@@ -75,6 +77,16 @@ export function useUserProviders() {
 
 export function useAllProviders() {
   return useAppSelector(selectAllProviders)
+}
+
+export function useModelGroups() {
+  const modelGroups = useAppSelector(selectModelGroups)
+  const dispatch = useAppDispatch()
+
+  return {
+    modelGroups,
+    setModelGroups: (groups: AssistantModelGroup[]) => dispatch(setModelGroups(groups))
+  }
 }
 
 export function useProvider(id: string) {
