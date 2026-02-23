@@ -7,6 +7,7 @@ import type { ReasoningPart } from '@ai-sdk/provider-utils'
 import { loggerService } from '@logger'
 import { isImageEnhancementModel, isVisionModel } from '@renderer/config/models'
 import type { Message, Model } from '@renderer/types'
+import { FILE_TYPE } from '@renderer/types'
 import type { FileMessageBlock, ImageMessageBlock, ThinkingMessageBlock } from '@renderer/types/newMessage'
 import {
   findFileBlocks,
@@ -25,7 +26,7 @@ import type {
   UserModelMessage
 } from 'ai'
 
-import { convertFileBlockToFilePart, convertFileBlockToTextPart } from './fileProcessor'
+import { convertFileBlockToFilePart, convertFileBlockToTextPart, convertVideoFileBlockToParts } from './fileProcessor'
 
 const logger = loggerService.withContext('messageConverter')
 
@@ -112,8 +113,17 @@ async function convertMessageToUserModelMessage(
     const file = fileBlock.file
     let processed = false
 
+    // 视频统一转换为“帧 + 音频 + 文本”多模态片段
+    if (model && file.type === FILE_TYPE.VIDEO) {
+      const videoParts = await convertVideoFileBlockToParts(fileBlock, model)
+      if (videoParts.length > 0) {
+        parts.push(...videoParts)
+        processed = true
+      }
+    }
+
     // 优先尝试原生文件支持（PDF、图片等）
-    if (model) {
+    if (!processed && model) {
       const filePart = await convertFileBlockToFilePart(fileBlock, model)
       if (filePart) {
         // 判断filePart是否为string

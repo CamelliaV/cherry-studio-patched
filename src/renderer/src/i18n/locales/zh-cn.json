@@ -635,6 +635,13 @@
         "title": "MCP 服务器"
       },
       "model": "模型设置",
+      "model_group": {
+        "count_suffix": "{{count}} 个模型",
+        "edit": "编辑模型组",
+        "option_label": "分组：{{name}}（{{count}}）",
+        "selected_label": "分组：{{name}}",
+        "use_single_model": "使用单模型"
+      },
       "more": "助手设置",
       "prompt": "提示词设置",
       "reasoning_effort": {
@@ -1388,6 +1395,7 @@
     "subscribe": "订阅",
     "success": "成功",
     "swap": "交换",
+    "tokens": "Token",
     "topics": "话题",
     "translate_text": "翻译文本",
     "unknown": "未知",
@@ -5141,6 +5149,34 @@
       "zoom_in": "放大界面",
       "zoom_out": "缩小界面",
       "zoom_reset": "重置缩放"
+    },
+    "statistics": {
+      "assistant_meta": "{{tokens}} Token · {{topics}} 个话题 · {{conversations}} 组对话",
+      "cards": {
+        "assistants": "助手数",
+        "completion_tokens": "输出 Token",
+        "conversations": "对话组",
+        "messages": "消息数",
+        "prompt_tokens": "输入 Token",
+        "topics": "话题数",
+        "total_tokens": "总 Token"
+      },
+      "columns": {
+        "completion_tokens": "输出",
+        "conversation": "对话组",
+        "messages": "消息",
+        "prompt_tokens": "输入",
+        "total_tokens": "总计",
+        "updated_at": "更新时间"
+      },
+      "conversation_label": "对话 {{index}}",
+      "description": "按助手、话题和对话层级统计 Token 使用情况。",
+      "last_updated": "更新时间：{{time}}",
+      "menu": "统计",
+      "no_conversations": "暂无对话",
+      "no_topics": "暂无话题",
+      "title": "Token 统计",
+      "topic_meta": "{{tokens}} Token · {{conversations}} 组对话 · {{messages}} 条消息"
     },
     "theme": {
       "color_primary": "主题颜色",

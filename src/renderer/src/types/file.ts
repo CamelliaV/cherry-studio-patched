@@ -135,6 +135,63 @@ export type PdfFileMetadata = FileMetadata & {
   ext: '.pdf'
 }
 
+export interface VideoIngestOptions {
+  frameIntervalSec?: number
+  maxFrames?: number
+  segmentDurationSec?: number
+  maxAudioDurationSec?: number
+}
+
+export interface VideoIngestFrame {
+  path: string
+  mime: string
+  timestampSec: number
+}
+
+export interface VideoTranscriptSegment {
+  startSec: number
+  endSec: number
+  text: string
+}
+
+export interface VideoIngestAudio {
+  path: string
+  mime: string
+  sampleRate: number
+  channels: number
+  size: number
+}
+
+export interface VideoIngestTranscript {
+  path: string
+  format: 'srt' | 'vtt'
+  segments: VideoTranscriptSegment[]
+}
+
+export interface VideoIngestSegment {
+  index: number
+  startSec: number
+  endSec: number
+  framePaths: string[]
+  representativeFramePath?: string
+  transcript?: string
+}
+
+export interface VideoIngestResult {
+  sourceFileId: string
+  sourceHash: string
+  sourcePath: string
+  createdAt: string
+  cacheDir: string
+  durationSec: number
+  frameIntervalSec: number
+  segmentDurationSec: number
+  frames: VideoIngestFrame[]
+  segments: VideoIngestSegment[]
+  audio?: VideoIngestAudio
+  transcript?: VideoIngestTranscript
+}
+
 /**
  * 类型守卫函数，用于检查一个 FileMetadata 是否为图片文件元数据
  * @param file - 要检查的文件元数据

@@ -18,7 +18,7 @@ import { classNames } from '@renderer/utils'
 import { getFilesFromDropEvent, isSendMessageKeyPressed } from '@renderer/utils/input'
 import { createFileBlock, createImageBlock } from '@renderer/utils/messageUtils/create'
 import { findAllBlocks } from '@renderer/utils/messageUtils/find'
-import { documentExts, imageExts, textExts } from '@shared/config/constant'
+import { documentExts, imageExts, textExts, videoExts } from '@shared/config/constant'
 import { Space, Tooltip } from 'antd'
 import type { TextAreaRef } from 'antd/es/input/TextArea'
 import TextArea from 'antd/es/input/TextArea'
@@ -98,9 +98,9 @@ const MessageBlockEditor: FC<Props> = ({ message, topicId, onSave, onResend, onC
 
   const extensions = useMemo(() => {
     if (couldAddImageFile && couldAddTextFile) {
-      return [...imageExts, ...documentExts, ...textExts]
+      return [...imageExts, ...videoExts, ...documentExts, ...textExts]
     } else if (couldAddImageFile) {
-      return [...imageExts]
+      return [...imageExts, ...videoExts]
     } else if (couldAddTextFile) {
       return [...documentExts, ...textExts]
     } else {

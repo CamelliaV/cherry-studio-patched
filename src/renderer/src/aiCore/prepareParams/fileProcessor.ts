@@ -6,16 +6,81 @@
 import type OpenAI from '@cherrystudio/openai'
 import { loggerService } from '@logger'
 import { getProviderByModel } from '@renderer/services/AssistantService'
-import type { FileMetadata, Message, Model } from '@renderer/types'
+import type { FileMetadata, Message, Model, VideoIngestResult } from '@renderer/types'
 import { FILE_TYPE } from '@renderer/types'
 import type { FileMessageBlock } from '@renderer/types/newMessage'
 import { findFileBlocks } from '@renderer/utils/messageUtils/find'
-import type { FilePart, TextPart } from 'ai'
+import type { FilePart, ImagePart, TextPart } from 'ai'
 
 import { getAiSdkProviderId } from '../provider/factory'
 import { getFileSizeLimit, supportsImageInput, supportsLargeFileUpload, supportsPdfInput } from './modelCapabilities'
 
 const logger = loggerService.withContext('fileProcessor')
+
+const MAX_VIDEO_FRAME_PARTS = 12
+const MAX_VIDEO_SEGMENT_TEXTS = 24
+const MAX_VIDEO_TRANSCRIPT_CHARS = 10000
+
+function formatTimelineTimestamp(seconds: number): string {
+  const safeSeconds = Math.max(0, Math.floor(seconds || 0))
+  const hours = Math.floor(safeSeconds / 3600)
+  const minutes = Math.floor((safeSeconds % 3600) / 60)
+  const remainSeconds = safeSeconds % 60
+
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainSeconds.toString().padStart(2, '0')}`
+  }
+
+  return `${minutes.toString().padStart(2, '0')}:${remainSeconds.toString().padStart(2, '0')}`
+}
+
+function buildVideoSummaryText(file: FileMetadata, ingestResult: VideoIngestResult): string {
+  const lines = [
+    `Video attachment: ${file.origin_name}`,
+    `Duration: ${formatTimelineTimestamp(ingestResult.durationSec)}`,
+    `Segments: ${ingestResult.segments.length}`,
+    `Frames extracted: ${ingestResult.frames.length}`,
+    ingestResult.audio ? 'Audio extracted: yes' : 'Audio extracted: no',
+    ingestResult.transcript?.segments.length
+      ? `Transcript segments: ${ingestResult.transcript.segments.length}`
+      : 'Transcript segments: 0'
+  ]
+
+  return lines.join('\n')
+}
+
+function buildVideoTimelineText(ingestResult: VideoIngestResult): string | null {
+  const lines = ingestResult.segments.slice(0, MAX_VIDEO_SEGMENT_TEXTS).map((segment) => {
+    const range = `[${formatTimelineTimestamp(segment.startSec)} - ${formatTimelineTimestamp(segment.endSec)}]`
+    const transcript = segment.transcript ? segment.transcript.slice(0, 160) : 'No transcript'
+    return `${range} ${transcript}`
+  })
+
+  if (lines.length === 0) {
+    return null
+  }
+
+  return `Video timeline:\n${lines.join('\n')}`
+}
+
+function buildVideoTranscriptText(ingestResult: VideoIngestResult): string | null {
+  if (!ingestResult.transcript?.segments.length) {
+    return null
+  }
+
+  const lines = ingestResult.transcript.segments.slice(0, MAX_VIDEO_SEGMENT_TEXTS).map((segment) => {
+    const range = `[${formatTimelineTimestamp(segment.startSec)} - ${formatTimelineTimestamp(segment.endSec)}]`
+    return `${range} ${segment.text}`
+  })
+
+  const transcriptText = lines.join('\n').slice(0, MAX_VIDEO_TRANSCRIPT_CHARS)
+
+  if (!transcriptText) {
+    return null
+  }
+
+  return `Video transcript:\n${transcriptText}`
+}
 
 /**
  * 提取文件内容
@@ -78,6 +143,86 @@ export async function convertFileBlockToTextPart(fileBlock: FileMessageBlock): P
   }
 
   return null
+}
+
+/**
+ * 将视频文件转换为“帧 + 音频 + 时间线文本”多模态输入
+ */
+export async function convertVideoFileBlockToParts(
+  fileBlock: FileMessageBlock,
+  model: Model
+): Promise<Array<TextPart | FilePart | ImagePart>> {
+  const file = fileBlock.file
+
+  if (file.type !== FILE_TYPE.VIDEO) {
+    return []
+  }
+
+  try {
+    const includeFrames = supportsImageInput(model)
+    const ingestResult = await window.api.file.ingestVideo(file, {
+      frameIntervalSec: includeFrames ? 2 : 4,
+      maxFrames: includeFrames ? MAX_VIDEO_FRAME_PARTS : 0,
+      segmentDurationSec: 20,
+      maxAudioDurationSec: 600
+    })
+
+    const parts: Array<TextPart | FilePart | ImagePart> = []
+    parts.push({ type: 'text', text: buildVideoSummaryText(file, ingestResult) })
+
+    const timelineText = buildVideoTimelineText(ingestResult)
+    if (timelineText) {
+      parts.push({ type: 'text', text: timelineText })
+    }
+
+    if (includeFrames) {
+      const framePaths = ingestResult.segments
+        .map((segment) => segment.representativeFramePath)
+        .filter((framePath): framePath is string => Boolean(framePath))
+        .slice(0, MAX_VIDEO_FRAME_PARTS)
+
+      for (const framePath of framePaths) {
+        const base64Frame = await window.api.file.base64ExternalFile(framePath)
+        parts.push({
+          type: 'image',
+          image: base64Frame.data,
+          mediaType: base64Frame.mime
+        })
+      }
+    }
+
+    if (ingestResult.audio?.path) {
+      const audioSizeLimit = getFileSizeLimit(model, FILE_TYPE.AUDIO)
+      if (audioSizeLimit === Infinity || ingestResult.audio.size <= audioSizeLimit) {
+        const base64Audio = await window.api.file.base64ExternalFile(ingestResult.audio.path)
+        parts.push({
+          type: 'file',
+          data: base64Audio.data,
+          mediaType: base64Audio.mime,
+          filename: `${file.id}_audio.wav`
+        })
+      } else {
+        logger.warn(
+          `Extracted audio from ${file.origin_name} exceeds size limit (${ingestResult.audio.size} > ${audioSizeLimit})`
+        )
+      }
+    }
+
+    const transcriptText = buildVideoTranscriptText(ingestResult)
+    if (transcriptText) {
+      parts.push({ type: 'text', text: transcriptText })
+    }
+
+    return parts
+  } catch (error) {
+    logger.warn(`Failed to preprocess video ${file.origin_name}:`, error as Error)
+    return [
+      {
+        type: 'text',
+        text: `Video attachment: ${file.origin_name}\nFailed to preprocess video into frames and audio. Please summarize based on available context.`
+      }
+    ]
+  }
 }
 
 /**
@@ -255,6 +400,11 @@ export async function convertFileBlockToFilePart(fileBlock: FileMessageBlock, mo
         mediaType: mediaType,
         filename: file.origin_name
       }
+    }
+
+    // 视频输入不再发送原始文件，统一在上层通过 convertVideoFileBlockToParts 做“帧 + 音频”转换
+    if (file.type === FILE_TYPE.VIDEO) {
+      return null
     }
 
     // 处理其他文档类型（Word、Excel等）

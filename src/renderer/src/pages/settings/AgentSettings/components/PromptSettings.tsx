@@ -79,7 +79,9 @@ const PromptSettings: FC<AgentOrSessionSettingsProps> = ({ agentBase, update }) 
           </RichEditorContainer>
         </TextAreaContainer>
         <HSpaceBetweenStack width="100%" justifyContent="flex-end" mt="10px">
-          <TokenCount>Tokens: {tokenCount}</TokenCount>
+          <TokenCount>
+            {t('common.tokens')}: {tokenCount}
+          </TokenCount>
           <Button
             type="primary"
             icon={showPreview ? <Edit size={14} /> : <Save size={14} />}

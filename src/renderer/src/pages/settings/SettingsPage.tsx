@@ -4,6 +4,7 @@ import Scrollbar from '@renderer/components/Scrollbar'
 import ModelSettings from '@renderer/pages/settings/ModelSettings/ModelSettings'
 import { Divider as AntDivider } from 'antd'
 import {
+  BarChart3,
   Brain,
   Cloud,
   Command,
@@ -36,6 +37,7 @@ import QuickAssistantSettings from './QuickAssistantSettings'
 import QuickPhraseSettings from './QuickPhraseSettings'
 import SelectionAssistantSettings from './SelectionAssistantSettings/SelectionAssistantSettings'
 import ShortcutSettings from './ShortcutSettings'
+import StatisticsSettings from './StatisticsSettings'
 import { ApiServerSettings } from './ToolSettings/ApiServerSettings'
 import WebSearchSettings from './WebSearchSettings'
 
@@ -81,6 +83,12 @@ const SettingsPage: FC = () => {
             <MenuItem className={isRoute('/settings/data')}>
               <HardDrive size={18} />
               {t('settings.data.title')}
+            </MenuItem>
+          </MenuItemLink>
+          <MenuItemLink to="/settings/statistics">
+            <MenuItem className={isRoute('/settings/statistics')}>
+              <BarChart3 size={18} />
+              {t('settings.statistics.menu')}
             </MenuItem>
           </MenuItemLink>
           <Divider />
@@ -155,6 +163,7 @@ const SettingsPage: FC = () => {
             <Route path="api-server" element={<ApiServerSettings />} />
             <Route path="docprocess" element={<DocProcessSettings />} />
             <Route path="quickphrase" element={<QuickPhraseSettings />} />
+            <Route path="statistics" element={<StatisticsSettings />} />
             <Route path="mcp/*" element={<MCPSettings />} />
             <Route path="memory" element={<MemorySettings />} />
             <Route path="general/*" element={<GeneralSettings />} />

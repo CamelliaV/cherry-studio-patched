@@ -173,7 +173,9 @@ export const InputbarToolsProvider: React.FC<InputbarToolsProviderProps> = ({ ch
   const [couldAddImageFile, setCouldAddImageFile] = useState(initialState?.couldAddImageFile || false)
   const [extensions, setExtensions] = useState<string[]>(initialState?.extensions || [])
 
-  const couldMentionNotVisionModel = !files.some((file) => file.type === FILE_TYPE.IMAGE)
+  const couldMentionNotVisionModel = !files.some(
+    (file) => file.type === FILE_TYPE.IMAGE || file.type === FILE_TYPE.VIDEO
+  )
 
   // Quick Panel Registry (stored in refs to avoid re-renders)
   const rootMenuRegistryRef = useRef(new Map<string, QuickPanelListItem[]>())

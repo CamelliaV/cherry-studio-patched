@@ -635,6 +635,13 @@
         "title": "MCP 設定"
       },
       "model": "模型設定",
+      "model_group": {
+        "count_suffix": "{{count}} 個模型",
+        "edit": "編輯模型群組",
+        "option_label": "群組：{{name}}（{{count}}）",
+        "selected_label": "群組：{{name}}",
+        "use_single_model": "使用單一模型"
+      },
       "more": "助手設定",
       "prompt": "提示詞設定",
       "reasoning_effort": {
@@ -1388,6 +1395,7 @@
     "subscribe": "訂閱",
     "success": "成功",
     "swap": "交換",
+    "tokens": "Token",
     "topics": "話題",
     "translate_text": "翻譯文字",
     "unknown": "未知",
@@ -5141,6 +5149,34 @@
       "zoom_in": "放大介面",
       "zoom_out": "縮小介面",
       "zoom_reset": "重設縮放"
+    },
+    "statistics": {
+      "assistant_meta": "{{tokens}} Token · {{topics}} 個話題 · {{conversations}} 組對話",
+      "cards": {
+        "assistants": "助手數",
+        "completion_tokens": "輸出 Token",
+        "conversations": "對話組",
+        "messages": "訊息數",
+        "prompt_tokens": "輸入 Token",
+        "topics": "話題數",
+        "total_tokens": "總 Token"
+      },
+      "columns": {
+        "completion_tokens": "輸出",
+        "conversation": "對話組",
+        "messages": "訊息",
+        "prompt_tokens": "輸入",
+        "total_tokens": "總計",
+        "updated_at": "更新時間"
+      },
+      "conversation_label": "對話 {{index}}",
+      "description": "依助手、話題與對話層級統計 Token 使用情況。",
+      "last_updated": "更新時間：{{time}}",
+      "menu": "統計",
+      "no_conversations": "暫無對話",
+      "no_topics": "暫無話題",
+      "title": "Token 統計",
+      "topic_meta": "{{tokens}} Token · {{conversations}} 組對話 · {{messages}} 則訊息"
     },
     "theme": {
       "color_primary": "主題顏色",

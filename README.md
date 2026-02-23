@@ -84,6 +84,16 @@ This README reflects only the new functionality added in this patch series.
   - Topic with uploaded image files: `.md` + sibling `<markdown-name>.assets/` folder, with Markdown image links pointing to copied files.
   - URL-based images remain URL links in Markdown.
 
+14. Token statistics dashboard
+- Added a dedicated `Settings -> Statistics` page.
+- Token usage is aggregated at assistant/topic/conversation levels.
+- Includes prompt tokens, completion tokens, total tokens, message counts, and update time.
+
+15. Faster model-group management from chat navbar
+- The top model switcher now includes an `Edit Model Groups` action.
+- Clicking it opens assistant settings directly on the model tab.
+- Model-group labels/counts in navbar selector are now fully localized.
+
 ## Arch Linux Quick Install
 
 ```bash

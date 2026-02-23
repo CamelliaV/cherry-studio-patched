@@ -75,6 +75,13 @@ export function supportsImageInput(model: Model): boolean {
 }
 
 /**
+ * 检查模型是否支持原生视频输入
+ */
+export function supportsVideoInput(model: Model): boolean {
+  return isVisionModel(model)
+}
+
+/**
  * 检查提供商是否支持大文件上传（如Gemini File API）
  */
 export function supportsLargeFileUpload(model: Model): boolean {

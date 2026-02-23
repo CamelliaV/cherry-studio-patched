@@ -25,12 +25,13 @@ const MessageVideo: FC<Props> = ({ block }) => {
    * 渲染本地视频文件
    */
   const renderLocalVideo = () => {
-    if (!block.filePath) {
+    const localPath = block.filePath || block.metadata?.video?.path
+    if (!localPath) {
       logger.warn('Local video was requested but block.filePath is missing.')
       return <div>{t('message.video.error.local_file_missing')}</div>
     }
 
-    const videoSrc = `file://${block.metadata?.video.path}`
+    const videoSrc = `file://${encodeURI(localPath)}`
 
     const handleReady = () => {
       const startTime = Math.floor(block.metadata?.startTime ?? 0)
@@ -54,21 +55,26 @@ const MessageVideo: FC<Props> = ({ block }) => {
   }
 
   const renderVideo = () => {
-    switch (block.metadata?.type) {
-      case 'video':
-        return renderLocalVideo()
-
-      default:
-        if (block.filePath) {
-          logger.warn(
-            `Unknown video type: ${block.metadata?.type}, but with filePath will try to render as local video.`
-          )
-          return renderLocalVideo()
-        }
-
-        logger.warn(`Unsupported video type: ${block.metadata?.type} or missing necessary data.`)
-        return <div>{t('message.video.error.unsupported_type')}</div>
+    if (block.url) {
+      return (
+        <ReactPlayer
+          ref={playerRef}
+          style={{
+            height: '100%',
+            width: '100%'
+          }}
+          src={block.url}
+          controls
+        />
+      )
     }
+
+    if (block.filePath || block.metadata?.video?.path) {
+      return renderLocalVideo()
+    }
+
+    logger.warn(`Unsupported video type: ${block.metadata?.type} or missing necessary data.`)
+    return <div>{t('message.video.error.unsupported_type')}</div>
   }
 
   return <Container>{renderVideo()}</Container>

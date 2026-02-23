@@ -635,6 +635,13 @@
         "title": "MCP Settings"
       },
       "model": "Model Settings",
+      "model_group": {
+        "count_suffix": "{{count}} models",
+        "edit": "Edit Model Groups",
+        "option_label": "Group: {{name}} ({{count}})",
+        "selected_label": "Group: {{name}}",
+        "use_single_model": "Use Single Model"
+      },
       "more": "Assistant Settings",
       "prompt": "Prompt Settings",
       "reasoning_effort": {
@@ -1388,6 +1395,7 @@
     "subscribe": "Subscribe",
     "success": "Success",
     "swap": "Swap",
+    "tokens": "Tokens",
     "topics": "Topics",
     "translate_text": "Translate text",
     "unknown": "Unknown",
@@ -5141,6 +5149,34 @@
       "zoom_in": "Zoom In",
       "zoom_out": "Zoom Out",
       "zoom_reset": "Reset Zoom"
+    },
+    "statistics": {
+      "assistant_meta": "{{tokens}} tokens · {{topics}} topics · {{conversations}} conversations",
+      "cards": {
+        "assistants": "Assistants",
+        "completion_tokens": "Completion Tokens",
+        "conversations": "Conversations",
+        "messages": "Messages",
+        "prompt_tokens": "Prompt Tokens",
+        "topics": "Topics",
+        "total_tokens": "Total Tokens"
+      },
+      "columns": {
+        "completion_tokens": "Completion",
+        "conversation": "Conversation",
+        "messages": "Messages",
+        "prompt_tokens": "Prompt",
+        "total_tokens": "Total",
+        "updated_at": "Updated"
+      },
+      "conversation_label": "Conversation {{index}}",
+      "description": "Token usage statistics across all assistants, topics and conversations.",
+      "last_updated": "Updated at {{time}}",
+      "menu": "Statistics",
+      "no_conversations": "No conversations",
+      "no_topics": "No topics",
+      "title": "Token Statistics",
+      "topic_meta": "{{tokens}} tokens · {{conversations}} conversations · {{messages}} messages"
     },
     "theme": {
       "color_primary": "Primary Color",

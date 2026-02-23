@@ -12,14 +12,18 @@ import {
 } from '@renderer/types/newMessage'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { convertFileBlockToFilePartMock, convertFileBlockToTextPartMock } = vi.hoisted(() => ({
-  convertFileBlockToFilePartMock: vi.fn(),
-  convertFileBlockToTextPartMock: vi.fn()
-}))
+const { convertFileBlockToFilePartMock, convertFileBlockToTextPartMock, convertVideoFileBlockToPartsMock } = vi.hoisted(
+  () => ({
+    convertFileBlockToFilePartMock: vi.fn(),
+    convertFileBlockToTextPartMock: vi.fn(),
+    convertVideoFileBlockToPartsMock: vi.fn()
+  })
+)
 
 vi.mock('../fileProcessor', () => ({
   convertFileBlockToFilePart: convertFileBlockToFilePartMock,
-  convertFileBlockToTextPart: convertFileBlockToTextPartMock
+  convertFileBlockToTextPart: convertFileBlockToTextPartMock,
+  convertVideoFileBlockToParts: convertVideoFileBlockToPartsMock
 }))
 
 const visionModelIds = new Set(['gpt-4o-mini', 'qwen-image-edit'])
@@ -127,8 +131,10 @@ describe('messageConverter', () => {
   beforeEach(() => {
     convertFileBlockToFilePartMock.mockReset()
     convertFileBlockToTextPartMock.mockReset()
+    convertVideoFileBlockToPartsMock.mockReset()
     convertFileBlockToFilePartMock.mockResolvedValue(null)
     convertFileBlockToTextPartMock.mockResolvedValue(null)
+    convertVideoFileBlockToPartsMock.mockResolvedValue([])
     messageCounter = 0
     blockCounter = 0
   })
@@ -242,6 +248,37 @@ describe('messageConverter', () => {
           content: [{ type: 'text', text: 'Summarize the PDF' }]
         }
       ])
+    })
+
+    it('routes video file blocks to video preprocessor parts', async () => {
+      const model = createModel()
+      const message = createMessage('user')
+      message.__mockContent = 'Analyze this video'
+      message.__mockFileBlocks = [
+        createFileBlock(message.id, {
+          file: {
+            ext: '.mp4',
+            type: FILE_TYPE.VIDEO,
+            origin_name: 'demo.mp4'
+          }
+        })
+      ]
+      convertVideoFileBlockToPartsMock.mockResolvedValueOnce([
+        { type: 'text', text: 'Video summary' },
+        { type: 'file', data: 'audio-base64', mediaType: 'audio/wav', filename: 'audio.wav' }
+      ])
+
+      const result = await convertMessageToSdkParam(message, false, model)
+
+      expect(convertVideoFileBlockToPartsMock).toHaveBeenCalledTimes(1)
+      expect(result).toEqual({
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Analyze this video' },
+          { type: 'text', text: 'Video summary' },
+          { type: 'file', data: 'audio-base64', mediaType: 'audio/wav', filename: 'audio.wav' }
+        ]
+      })
     })
 
     it('includes reasoning parts for assistant messages with thinking blocks', async () => {

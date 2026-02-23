@@ -8,6 +8,7 @@ This file provides guidance to AI coding assistants when working with code in th
 - **Match the house style**: Reuse existing patterns, naming, and conventions.
 - **Search smart**: Prefer `ast-grep` for semantic queries; fall back to `rg`/`grep` when needed.
 - **Log centrally**: Route all logging through `loggerService` with the right context—no `console.log`.
+- **Locale discipline**: Do not hardcode user-facing UI text. Add i18n keys (at minimum in `locales/en-us.json`, `locales/zh-cn.json`, and `locales/zh-tw.json`) and keep locale files in sync.
 - **Research via subagent**: Lean on `subagent` for external docs, APIs, news, and references.
 - **Always propose before executing**: Before making any changes, clearly explain your planned approach and wait for explicit user approval to ensure alignment and prevent unwanted modifications.
 - **Lint, test, and format before completion**: Coding tasks are only complete after running `pnpm lint`, `pnpm test`, and `pnpm format` successfully.
@@ -17,6 +18,12 @@ This file provides guidance to AI coding assistants when working with code in th
 
 When creating a Pull Request, you MUST use the `gh-create-pr` skill.
 If the skill is unavailable, directly read `.agents/skills/gh-create-pr/SKILL.md` and follow it manually.
+
+## Git Remote Policy (CRITICAL)
+
+- `origin` is upstream (`CherryHQ/cherry-studio`) and is **fetch-only**.
+- `fork` is the writable remote (`CamelliaV/cherry-studio-patched`) and is the **only** remote used for pushes.
+- Never push to `origin`.
 
 ## Development Commands
 

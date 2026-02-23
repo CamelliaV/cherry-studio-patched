@@ -21,6 +21,7 @@ import { FileText, FolderCog, FolderInput, FolderOpen, FolderOutput, SaveIcon } 
 import type { FC } from 'react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import {
@@ -46,6 +47,7 @@ import YuqueSettings from './YuqueSettings'
 
 const DataSettings: FC = () => {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [appInfo, setAppInfo] = useState<AppInfo>()
   const [cacheSize, setCacheSize] = useState<string>('')
   const { size, removeAllFiles } = useKnowledgeFiles()
@@ -597,6 +599,16 @@ const DataSettings: FC = () => {
           <>
             <SettingGroup theme={theme}>
               <SettingTitle>{t('settings.data.title')}</SettingTitle>
+              <SettingDivider />
+              <SettingRow>
+                <SettingRowTitle>{t('settings.statistics.title')}</SettingRowTitle>
+                <HStack gap="5px" justifyContent="space-between">
+                  <Button onClick={() => navigate('/settings/statistics')}>{t('common.open')}</Button>
+                </HStack>
+              </SettingRow>
+              <SettingRow>
+                <SettingHelpText>{t('settings.statistics.description')}</SettingHelpText>
+              </SettingRow>
               <SettingDivider />
               <SettingRow>
                 <SettingRowTitle>{t('settings.general.backup.title')}</SettingRowTitle>

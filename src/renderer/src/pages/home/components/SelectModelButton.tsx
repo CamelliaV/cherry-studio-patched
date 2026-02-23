@@ -4,6 +4,7 @@ import { isLocalAi } from '@renderer/config/env'
 import { isEmbeddingModel, isRerankModel, isWebSearchModel } from '@renderer/config/models'
 import { useAssistant } from '@renderer/hooks/useAssistant'
 import { useModelGroups, useProvider } from '@renderer/hooks/useProvider'
+import AssistantSettingsPopup from '@renderer/pages/settings/AssistantSettings'
 import { resolveAssistantDisplayModel } from '@renderer/services/ModelCandidatesService'
 import { getProviderName } from '@renderer/services/ProviderService'
 import type { Assistant, Model } from '@renderer/types'
@@ -90,7 +91,7 @@ const SelectModelButton: FC<Props> = ({ assistant }) => {
       items.push(
         ...modelGroups.map((group) => ({
           key: `group:${group.id}`,
-          label: `Group: ${group.name} (${group.models.length})`,
+          label: t('assistants.settings.model_group.option_label', { name: group.name, count: group.models.length }),
           disabled: group.models.length === 0
         }))
       )
@@ -98,8 +99,11 @@ const SelectModelButton: FC<Props> = ({ assistant }) => {
 
     if (assistant.selectedModelGroupId) {
       items.push({ type: 'divider' })
-      items.push({ key: 'single:use', label: 'Use Single Model' })
+      items.push({ key: 'single:use', label: t('assistants.settings.model_group.use_single_model') })
     }
+
+    items.push({ type: 'divider' })
+    items.push({ key: 'group:edit', label: t('assistants.settings.model_group.edit') })
 
     return items
   }, [assistant.selectedModelGroupId, modelGroups, t])
@@ -116,11 +120,16 @@ const SelectModelButton: FC<Props> = ({ assistant }) => {
         return
       }
 
+      if (key === 'group:edit') {
+        await AssistantSettingsPopup.show({ assistant, tab: 'model' })
+        return
+      }
+
       if (key.startsWith('group:')) {
         onUseModelGroup(key.replace('group:', ''))
       }
     },
-    [onSelectModel, onUseModelGroup, onUseSingleModel]
+    [assistant, onSelectModel, onUseModelGroup, onUseSingleModel]
   )
 
   useEffect(() => {
@@ -134,8 +143,12 @@ const SelectModelButton: FC<Props> = ({ assistant }) => {
   }
 
   const providerName = getProviderName(model)
-  const titleText = selectedModelGroup ? `Group: ${selectedModelGroup.name}` : model?.name || t('button.select_model')
-  const suffixText = selectedModelGroup ? `${selectedModelGroup.models.length} models` : providerName
+  const titleText = selectedModelGroup
+    ? t('assistants.settings.model_group.selected_label', { name: selectedModelGroup.name })
+    : model?.name || t('button.select_model')
+  const suffixText = selectedModelGroup
+    ? t('assistants.settings.model_group.count_suffix', { count: selectedModelGroup.models.length })
+    : providerName
 
   return (
     <Dropdown menu={{ items: menuItems, onClick: onMenuClick }} trigger={['click']}>

@@ -10,7 +10,8 @@ import {
   FileZipFilled,
   FolderOpenFilled,
   GlobalOutlined,
-  LinkOutlined
+  LinkOutlined,
+  VideoCameraFilled
 } from '@ant-design/icons'
 import ConfirmDialog from '@renderer/components/ConfirmDialog'
 import CustomTag from '@renderer/components/Tags/CustomTag'
@@ -18,6 +19,7 @@ import { useAttachment } from '@renderer/hooks/useAttachment'
 import FileManager from '@renderer/services/FileManager'
 import type { FileMetadata } from '@renderer/types'
 import { formatFileSize } from '@renderer/utils'
+import { videoExts } from '@shared/config/constant'
 import { Flex, Image, Tooltip } from 'antd'
 import { isEmpty } from 'lodash'
 import type { FC, MouseEvent } from 'react'
@@ -80,6 +82,10 @@ export const getFileIcon = (type?: string) => {
 
   if (['.folder'].includes(ext)) {
     return <FolderOpenFilled />
+  }
+
+  if (videoExts.includes(ext)) {
+    return <VideoCameraFilled />
   }
 
   return <FileUnknownFilled />

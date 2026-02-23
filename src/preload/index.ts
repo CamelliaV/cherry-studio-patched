@@ -44,6 +44,8 @@ import type {
   StopApiServerStatusResult,
   SupportedOcrFile,
   ThemeMode,
+  VideoIngestOptions,
+  VideoIngestResult,
   WebDavConfig
 } from '@types'
 import type { OpenDialogOptions } from 'electron'
@@ -251,6 +253,10 @@ const api = {
       ipcRenderer.invoke(IpcChannel.File_Download, url, isUseContentType),
     copy: (fileId: string, destPath: string) => ipcRenderer.invoke(IpcChannel.File_Copy, fileId, destPath),
     base64File: (fileId: string) => ipcRenderer.invoke(IpcChannel.File_Base64File, fileId),
+    base64ExternalFile: (filePath: string): Promise<{ data: string; mime: string }> =>
+      ipcRenderer.invoke(IpcChannel.File_Base64ExternalFile, filePath),
+    ingestVideo: (file: FileMetadata, options?: VideoIngestOptions): Promise<VideoIngestResult> =>
+      ipcRenderer.invoke(IpcChannel.File_IngestVideo, file, options),
     pdfInfo: (fileId: string) => ipcRenderer.invoke(IpcChannel.File_GetPdfInfo, fileId),
     getPathForFile: (file: File) => webUtils.getPathForFile(file),
     openFileWithRelativePath: (file: FileMetadata) => ipcRenderer.invoke(IpcChannel.File_OpenWithRelativePath, file),

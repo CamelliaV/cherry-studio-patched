@@ -89,6 +89,7 @@ import {
 import storeSyncService from './services/StoreSyncService'
 import { themeService } from './services/ThemeService'
 import VertexAIService from './services/VertexAIService'
+import { videoIngestService } from './services/VideoIngestService'
 import { setOpenLinkExternal } from './services/WebviewService'
 import { windowService } from './services/WindowService'
 import { calculateDirectorySize, getDataPath, getResourcePath } from './utils'
@@ -634,6 +635,8 @@ export async function registerIpc(mainWindow: BrowserWindow, app: Electron.App) 
   ipcMain.handle(IpcChannel.File_SaveBase64Image, fileManager.saveBase64Image.bind(fileManager))
   ipcMain.handle(IpcChannel.File_SavePastedImage, fileManager.savePastedImage.bind(fileManager))
   ipcMain.handle(IpcChannel.File_Base64File, fileManager.base64File.bind(fileManager))
+  ipcMain.handle(IpcChannel.File_Base64ExternalFile, fileManager.base64ExternalFile.bind(fileManager))
+  ipcMain.handle(IpcChannel.File_IngestVideo, videoIngestService.ingestVideo.bind(videoIngestService))
   ipcMain.handle(IpcChannel.File_GetPdfInfo, fileManager.pdfPageCount.bind(fileManager))
   ipcMain.handle(IpcChannel.File_Download, fileManager.downloadFile.bind(fileManager))
   ipcMain.handle(IpcChannel.File_Copy, fileManager.copyFile.bind(fileManager))

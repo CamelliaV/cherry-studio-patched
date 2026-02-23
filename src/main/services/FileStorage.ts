@@ -24,6 +24,7 @@ import * as fs from 'fs'
 import { writeFileSync } from 'fs'
 import { readFile } from 'fs/promises'
 import { isBinaryFile } from 'isbinaryfile'
+import mime from 'mime-types'
 import officeParser from 'officeparser'
 import * as path from 'path'
 import { PDFDocument } from 'pdf-lib'
@@ -787,8 +788,31 @@ class FileStorage {
     const filePath = path.join(this.storageDir, id)
     const buffer = await fs.promises.readFile(filePath)
     const base64 = buffer.toString('base64')
-    const mime = `application/${path.extname(filePath).slice(1)}`
-    return { data: base64, mime }
+    const mimeType = `application/${path.extname(filePath).slice(1)}`
+    return { data: base64, mime: mimeType }
+  }
+
+  public base64ExternalFile = async (
+    _: Electron.IpcMainInvokeEvent,
+    filePath: string
+  ): Promise<{ data: string; mime: string }> => {
+    const resolvedPath = path.resolve(filePath)
+
+    const allowedRoots = [path.resolve(this.storageDir), path.resolve(this.tempDir)]
+    const isAllowedPath = allowedRoots.some((root) => resolvedPath === root || resolvedPath.startsWith(root + path.sep))
+
+    if (!isAllowedPath) {
+      throw new Error(`Access denied for external file: ${filePath}`)
+    }
+
+    const buffer = await fs.promises.readFile(resolvedPath)
+    const base64 = buffer.toString('base64')
+    const mimeType = mime.lookup(resolvedPath)
+
+    return {
+      data: base64,
+      mime: typeof mimeType === 'string' ? mimeType : 'application/octet-stream'
+    }
   }
 
   public pdfPageCount = async (_: Electron.IpcMainInvokeEvent, id: string): Promise<number> => {

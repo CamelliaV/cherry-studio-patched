@@ -24,7 +24,7 @@ import { abortCompletion } from '@renderer/utils/abortController'
 import { buildAgentSessionTopicId } from '@renderer/utils/agentSession'
 import { getSendMessageShortcutLabel } from '@renderer/utils/input'
 import { createMainTextBlock, createMessage } from '@renderer/utils/messageUtils/create'
-import { documentExts, imageExts, textExts } from '@shared/config/constant'
+import { documentExts, imageExts, textExts, videoExts } from '@shared/config/constant'
 import type { FC } from 'react'
 import React, { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -449,11 +449,11 @@ const AgentSessionInputbarInner: FC<InnerProps> = ({ assistant, agentId, session
 
   const supportedExts = useMemo(() => {
     if (canAddImageFile && canAddTextFile) {
-      return [...imageExts, ...documentExts, ...textExts]
+      return [...imageExts, ...videoExts, ...documentExts, ...textExts]
     }
 
     if (canAddImageFile) {
-      return [...imageExts]
+      return [...imageExts, ...videoExts]
     }
 
     if (canAddTextFile) {
