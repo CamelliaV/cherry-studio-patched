@@ -93,6 +93,13 @@ const initialState: ShortcutsState = {
       system: false
     },
     {
+      key: 'open_launcher',
+      shortcut: ['CommandOrControl', 'P'],
+      editable: true,
+      enabled: true,
+      system: false
+    },
+    {
       key: 'copy_last_message',
       shortcut: ['CommandOrControl', 'Shift', 'C'],
       editable: true,

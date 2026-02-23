@@ -1,7 +1,7 @@
 pkgbase = cherry-studio-patched-local
 	pkgdesc = Patched Cherry Studio built from the local working tree
 	pkgver = 1.7.19
-	pkgrel = 1
+	pkgrel = 2
 	url = https://github.com/CamelliaV/cherry-studio-patched
 	arch = x86_64
 	arch = aarch64

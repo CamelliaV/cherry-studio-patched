@@ -1,4 +1,4 @@
-export type Tab = 'assistants' | 'topic'
+export type Tab = 'assistants' | 'topic' | 'launcher'
 
 export type InputBarToolType =
   | 'new_topic'

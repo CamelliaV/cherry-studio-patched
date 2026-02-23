@@ -9,11 +9,12 @@ import type { Assistant, Topic } from '@renderer/types'
 import type { Tab } from '@renderer/types/chat'
 import { classNames, uuid } from '@renderer/utils'
 import type { FC } from 'react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import styled from 'styled-components'
 
 import Assistants from './AssistantsTab'
+import LauncherNavigator from './components/LauncherNavigator'
 import Topics from './TopicsTab'
 
 interface Props {
@@ -37,7 +38,7 @@ const HomeTabs: FC<Props> = ({
   forceToSeeAllTab,
   style
 }) => {
-  const { addAssistant } = useAssistants()
+  const { addAssistant, assistants } = useAssistants()
   const { topicPosition } = useSettings()
   const { defaultAssistant } = useDefaultAssistant()
   const { toggleShowTopics } = useShowTopics()
@@ -75,6 +76,16 @@ const HomeTabs: FC<Props> = ({
     dispatch(setActiveTopicOrSessionAction('topic'))
   }
 
+  const onLauncherSelect = useCallback(
+    (assistant: Assistant, topic: Topic) => {
+      setActiveAssistant(assistant)
+      setActiveTopic(topic)
+      dispatch(setActiveAgentId(null))
+      dispatch(setActiveTopicOrSessionAction('topic'))
+    },
+    [dispatch, setActiveAssistant, setActiveTopic]
+  )
+
   useEffect(() => {
     const unsubscribes = [
       EventEmitter.on(EVENT_NAMES.SHOW_ASSISTANTS, (): any => {
@@ -94,10 +105,10 @@ const HomeTabs: FC<Props> = ({
   }, [position, setTab, showTab, tab, toggleShowTopics, topicPosition])
 
   useEffect(() => {
-    if (position === 'right' && topicPosition === 'right' && tab === 'assistants') {
+    if (position === 'right' && topicPosition === 'right' && tab !== 'topic') {
       setTab('topic')
     }
-    if (position === 'left' && topicPosition === 'right' && tab === 'topic') {
+    if (position === 'left' && topicPosition === 'right' && tab !== 'assistants') {
       setTab('assistants')
     }
   }, [position, tab, topicPosition, forceToSeeAllTab])
@@ -113,6 +124,9 @@ const HomeTabs: FC<Props> = ({
           </TabItem>
           <TabItem active={tab === 'topic'} onClick={() => setTab('topic')}>
             {t('common.topics')}
+          </TabItem>
+          <TabItem active={tab === 'launcher'} onClick={() => setTab('launcher')}>
+            {t('settings.shortcuts.open_launcher')}
           </TabItem>
         </CustomTabs>
       )}
@@ -132,6 +146,15 @@ const HomeTabs: FC<Props> = ({
             activeTopic={activeTopic}
             setActiveTopic={setActiveTopic}
             position={position}
+          />
+        )}
+        {tab === 'launcher' && (
+          <LauncherNavigator
+            assistants={assistants}
+            activeAssistant={activeAssistant}
+            activeTopic={activeTopic}
+            mode="tab"
+            onSelect={onLauncherSelect}
           />
         )}
       </TabContent>

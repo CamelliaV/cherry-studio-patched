@@ -14,6 +14,7 @@ import { SettingRow } from '@renderer/pages/settings'
 import { DEFAULT_ASSISTANT_SETTINGS } from '@renderer/services/AssistantService'
 import { resolveAssistantDisplayModel } from '@renderer/services/ModelCandidatesService'
 import { getModelUniqId } from '@renderer/services/ModelService'
+import { getProviderName } from '@renderer/services/ProviderService'
 import type {
   Assistant,
   AssistantModelGroup,
@@ -203,6 +204,12 @@ const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateA
     updateAssistantSettings({ customParameters: newParams })
   }
   const modelFilter = useCallback((model: Model) => !isEmbeddingModel(model) && !isRerankModel(model), [])
+  const getGroupModelDisplayName = useCallback((model: Model) => {
+    const modelName = model.name || model.id
+    const providerName = getProviderName(model) || model.provider
+
+    return providerName ? `${modelName} | ${providerName}` : modelName
+  }, [])
 
   const normalizeModels = useCallback((models: Model[]) => {
     const modelMap = new Map<string, Model>()
@@ -534,7 +541,7 @@ const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateA
                     <CandidateRow key={getModelUniqId(groupModel) ?? `${groupModel.provider}-${groupModel.id}`}>
                       <HStack alignItems="center" gap={8} style={{ minWidth: 0 }}>
                         <ModelAvatar model={groupModel} size={18} />
-                        <ModelName>{groupModel.name}</ModelName>
+                        <ModelName>{getGroupModelDisplayName(groupModel)}</ModelName>
                       </HStack>
                       <Button
                         color="danger"

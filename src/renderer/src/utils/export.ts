@@ -6,12 +6,17 @@ import { getMessageTitle } from '@renderer/services/MessagesService'
 import { addNote } from '@renderer/services/NotesService'
 import store from '@renderer/store'
 import { setExportState } from '@renderer/store/runtime'
-import type { Topic } from '@renderer/types'
+import type { FileMetadata, Topic } from '@renderer/types'
 import type { Message } from '@renderer/types/newMessage'
-import { removeSpecialCharactersForFileName } from '@renderer/utils/file'
+import { removeFileExtension, removeSpecialCharactersForFileName } from '@renderer/utils/file'
 import { captureScrollableAsBlob, captureScrollableAsDataURL } from '@renderer/utils/image'
 import { convertMathFormula, markdownToPlainText } from '@renderer/utils/markdown'
-import { getCitationContent, getMainTextContent, getThinkingContent } from '@renderer/utils/messageUtils/find'
+import {
+  findImageBlocks,
+  getCitationContent,
+  getMainTextContent,
+  getThinkingContent
+} from '@renderer/utils/messageUtils/find'
 import { markdownToBlocks } from '@tryfabric/martian'
 import dayjs from 'dayjs'
 import DOMPurify from 'dompurify'
@@ -367,6 +372,189 @@ const messagesToPlainText = (messages: Message[]): string => {
   return messages.map(formatMessageAsPlainText).join('\n\n')
 }
 
+const MARKDOWN_IMAGE_ASSET_DIR_SUFFIX = '.assets'
+
+interface TopicMarkdownImageAsset {
+  sourceFileId: string
+  fileName: string
+}
+
+interface TopicMarkdownExportBundle {
+  markdown: string
+  imageAssets: TopicMarkdownImageAsset[]
+}
+
+interface BuildTopicMarkdownExportBundleOptions {
+  exportReasoning?: boolean
+  excludeCitations?: boolean
+  assetsDirName?: string
+}
+
+const getPathDirName = (filePath: string): string => {
+  const separatorIndex = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'))
+  return separatorIndex >= 0 ? filePath.slice(0, separatorIndex) : '.'
+}
+
+const getPathFileName = (filePath: string): string => {
+  const separatorIndex = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'))
+  return separatorIndex >= 0 ? filePath.slice(separatorIndex + 1) : filePath
+}
+
+const joinPath = (dirPath: string, name: string): string => {
+  const separator = dirPath.includes('\\') ? '\\' : '/'
+  if (!dirPath || dirPath === '.') {
+    return name
+  }
+  if (dirPath.endsWith('/') || dirPath.endsWith('\\')) {
+    return `${dirPath}${name}`
+  }
+  return `${dirPath}${separator}${name}`
+}
+
+const getFileExtensionFromName = (name: string): string => {
+  const dotIndex = name.lastIndexOf('.')
+  return dotIndex > 0 ? name.slice(dotIndex) : ''
+}
+
+const normalizeFileExtension = (ext?: string): string => {
+  if (!ext) {
+    return ''
+  }
+  return ext.startsWith('.') ? ext : `.${ext}`
+}
+
+const resolveStorageFileId = (file: FileMetadata): string | null => {
+  if (file.name?.trim()) {
+    return file.name
+  }
+
+  const normalizedExt = normalizeFileExtension(file.ext)
+  if (file.id?.trim()) {
+    return `${file.id}${normalizedExt}`
+  }
+
+  return null
+}
+
+const createUniqueAssetFileName = (baseName: string, ext: string, usedNames: Set<string>): string => {
+  let candidate = `${baseName}${ext}`
+  let nextSuffix = 2
+
+  while (usedNames.has(candidate.toLowerCase())) {
+    candidate = `${baseName}-${nextSuffix}${ext}`
+    nextSuffix += 1
+  }
+
+  usedNames.add(candidate.toLowerCase())
+  return candidate
+}
+
+const buildMessageImageReferences = (
+  message: Message,
+  messageIndex: number,
+  assetsDirName: string,
+  imageAssets: TopicMarkdownImageAsset[],
+  sourceToAssetName: Map<string, string>,
+  usedAssetNames: Set<string>
+): string[] => {
+  const imageBlocks = findImageBlocks(message)
+  const imageReferences: string[] = []
+
+  imageBlocks.forEach((imageBlock, imageIndex) => {
+    const fallbackImageName = `image-${messageIndex + 1}-${imageIndex + 1}`
+
+    if (imageBlock.file) {
+      const sourceFileId = resolveStorageFileId(imageBlock.file)
+      if (sourceFileId) {
+        let assetFileName = sourceToAssetName.get(sourceFileId)
+        if (!assetFileName) {
+          const originalName = imageBlock.file.origin_name || imageBlock.file.name || fallbackImageName
+          const originalBaseName = removeFileExtension(originalName)
+          const normalizedExt =
+            normalizeFileExtension(imageBlock.file.ext) ||
+            normalizeFileExtension(getFileExtensionFromName(originalName))
+          const finalExt = normalizedExt || '.png'
+          const safeBaseName = removeSpecialCharactersForFileName(originalBaseName) || fallbackImageName
+
+          assetFileName = createUniqueAssetFileName(safeBaseName, finalExt, usedAssetNames)
+          sourceToAssetName.set(sourceFileId, assetFileName)
+          imageAssets.push({ sourceFileId, fileName: assetFileName })
+        }
+
+        imageReferences.push(`![${fallbackImageName}](${encodeURI(`${assetsDirName}/${assetFileName}`)})`)
+        return
+      }
+    }
+
+    const imageUrls = [imageBlock.url, ...(imageBlock.metadata?.generateImageResponse?.images || [])].filter(
+      (url): url is string => Boolean(url && url.trim())
+    )
+
+    imageUrls.forEach((url, urlIndex) => {
+      imageReferences.push(`![${fallbackImageName}-${urlIndex + 1}](${url})`)
+    })
+  })
+
+  return imageReferences
+}
+
+export const buildTopicMarkdownExportBundle = (
+  topic: Topic,
+  messages: Message[],
+  options: BuildTopicMarkdownExportBundleOptions = {}
+): TopicMarkdownExportBundle => {
+  const assetsDirName =
+    options.assetsDirName ||
+    `${removeSpecialCharactersForFileName(topic.name || 'topic')}${MARKDOWN_IMAGE_ASSET_DIR_SUFFIX}`
+  const sourceToAssetName = new Map<string, string>()
+  const usedAssetNames = new Set<string>()
+  const imageAssets: TopicMarkdownImageAsset[] = []
+  const sections = messages.map((message, index) => {
+    const messageMarkdown = options.exportReasoning
+      ? messageToMarkdownWithReasoning(message, options.excludeCitations)
+      : messageToMarkdown(message, options.excludeCitations)
+    const imageReferences = buildMessageImageReferences(
+      message,
+      index,
+      assetsDirName,
+      imageAssets,
+      sourceToAssetName,
+      usedAssetNames
+    )
+
+    if (imageReferences.length === 0) {
+      return messageMarkdown
+    }
+
+    return [messageMarkdown, '', ...imageReferences].join('\n')
+  })
+
+  const title = `# ${topic.name}`
+  const markdown = sections.length > 0 ? `${title}\n\n${sections.join('\n---\n')}` : title
+
+  return { markdown, imageAssets }
+}
+
+const writeTopicMarkdownExportBundle = async (
+  markdownFilePath: string,
+  assetsDirName: string,
+  bundle: TopicMarkdownExportBundle
+): Promise<void> => {
+  const outputDirPath = getPathDirName(markdownFilePath)
+
+  if (bundle.imageAssets.length > 0) {
+    const assetsDirPath = joinPath(outputDirPath, assetsDirName)
+    await window.api.file.mkdir(assetsDirPath)
+
+    for (const asset of bundle.imageAssets) {
+      const destinationPath = joinPath(assetsDirPath, asset.fileName)
+      await window.api.file.copy(asset.sourceFileId, destinationPath)
+    }
+  }
+
+  await window.api.file.write(markdownFilePath, bundle.markdown)
+}
+
 export const topicToMarkdown = async (
   topic: Topic,
   exportReasoning?: boolean,
@@ -410,10 +598,19 @@ export const exportTopicAsMarkdown = async (
   const { markdownExportPath } = store.getState().settings
   if (!markdownExportPath) {
     try {
-      const fileName = removeSpecialCharactersForFileName(topic.name) + '.md'
-      const markdown = await topicToMarkdown(topic, exportReasoning, excludeCitations)
-      const result = await window.api.file.save(fileName, markdown)
+      const defaultFileName = removeSpecialCharactersForFileName(topic.name) + '.md'
+      const result = await window.api.file.save(defaultFileName, '')
       if (result) {
+        const fileName = getPathFileName(result)
+        const assetsDirName = `${removeFileExtension(fileName)}${MARKDOWN_IMAGE_ASSET_DIR_SUFFIX}`
+        const messages = await fetchTopicMessages(topic.id)
+        const bundle = buildTopicMarkdownExportBundle(topic, messages, {
+          exportReasoning,
+          excludeCitations,
+          assetsDirName
+        })
+
+        await writeTopicMarkdownExportBundle(result, assetsDirName, bundle)
         window.toast.success(i18n.t('message.success.markdown.export.specified'))
       }
     } catch (error: any) {
@@ -426,8 +623,16 @@ export const exportTopicAsMarkdown = async (
     try {
       const timestamp = dayjs().format('YYYY-MM-DD-HH-mm-ss')
       const fileName = removeSpecialCharactersForFileName(topic.name) + ` ${timestamp}.md`
-      const markdown = await topicToMarkdown(topic, exportReasoning, excludeCitations)
-      await window.api.file.write(markdownExportPath + '/' + fileName, markdown)
+      const markdownFilePath = joinPath(markdownExportPath, fileName)
+      const assetsDirName = `${removeFileExtension(fileName)}${MARKDOWN_IMAGE_ASSET_DIR_SUFFIX}`
+      const messages = await fetchTopicMessages(topic.id)
+      const bundle = buildTopicMarkdownExportBundle(topic, messages, {
+        exportReasoning,
+        excludeCitations,
+        assetsDirName
+      })
+
+      await writeTopicMarkdownExportBundle(markdownFilePath, assetsDirName, bundle)
       window.toast.success(i18n.t('message.success.markdown.export.preconf'))
     } catch (error: any) {
       window.toast.error(i18n.t('message.error.markdown.export.preconf'))

@@ -56,6 +56,9 @@ vi.mock('@renderer/utils/messageUtils/find', () => ({
     return citationBlocks
       .map((_, index) => `[${index + 1}] [https://example${index + 1}.com](Example Citation ${index + 1})`)
       .join('\n\n')
+  }),
+  findImageBlocks: vi.fn((message: Message & { _fullBlocks?: MessageBlock[] }) => {
+    return (message._fullBlocks?.filter((b) => b.type === MessageBlockType.IMAGE) ?? []) as any[]
   })
 }))
 
@@ -81,6 +84,7 @@ import { markdownToPlainText } from '@renderer/utils/markdown'
 
 import { copyMessageAsPlainText } from '../copy'
 import {
+  buildTopicMarkdownExportBundle,
   getTitleFromString,
   messagesToMarkdown,
   messageToMarkdown,
@@ -424,6 +428,62 @@ describe('export', () => {
       const markdown = messagesToMarkdown(msgs)
       expect(markdown).toContain('Single user query')
       expect(markdown.split('\n\n---\n\n').length).toBe(1)
+    })
+  })
+
+  describe('buildTopicMarkdownExportBundle', () => {
+    it('should export image-only user messages with markdown image references and copied asset descriptors', () => {
+      const imageBlock: MessageBlock = {
+        id: 'img-block-1',
+        messageId: 'u_img_1',
+        type: MessageBlockType.IMAGE,
+        createdAt: '2024-01-01T00:00:00Z',
+        status: MessageBlockStatus.SUCCESS,
+        file: {
+          id: 'image-file-id',
+          name: 'image-file-id.png',
+          origin_name: 'input-image.png',
+          path: '/tmp/image-file-id.png',
+          size: 1,
+          ext: '.png',
+          type: 'image',
+          created_at: '2024-01-01T00:00:00Z',
+          count: 1
+        } as any
+      } as any
+
+      const imageOnlyMessage: Message & { _fullBlocks: MessageBlock[] } = {
+        id: 'u_img_1',
+        role: 'user',
+        assistantId: 'assistant-1',
+        topicId: 'topic-export-image',
+        createdAt: '2024-01-01T00:00:00Z',
+        status: AssistantMessageStatus.SUCCESS,
+        blocks: ['img-block-1'],
+        _fullBlocks: [imageBlock]
+      }
+
+      const topic: Topic = {
+        id: 'topic-export-image',
+        name: 'Export Image Topic',
+        assistantId: 'assistant-1',
+        messages: [imageOnlyMessage] as any,
+        createdAt: '',
+        updatedAt: '',
+        type: TopicType.Chat
+      }
+
+      const bundle = buildTopicMarkdownExportBundle(topic, [imageOnlyMessage], {
+        assetsDirName: 'Export Image Topic.assets'
+      })
+
+      expect(bundle.imageAssets).toHaveLength(1)
+      expect(bundle.imageAssets[0]).toEqual({
+        sourceFileId: 'image-file-id.png',
+        fileName: 'input-image.png'
+      })
+      expect(bundle.markdown).toContain('## 🧑‍💻 User')
+      expect(bundle.markdown).toContain('![image-1-1](Export%20Image%20Topic.assets/input-image.png)')
     })
   })
 

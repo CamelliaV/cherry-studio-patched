@@ -1,10 +1,13 @@
 import { NavbarHeader } from '@renderer/components/app/Navbar'
+import LauncherPopup from '@renderer/components/Popups/LauncherPopup'
 import SearchPopup from '@renderer/components/Popups/SearchPopup'
 import { useAssistant } from '@renderer/hooks/useAssistant'
 import { useNavbarPosition, useSettings } from '@renderer/hooks/useSettings'
 import { useShortcut } from '@renderer/hooks/useShortcuts'
 import { useShowAssistants, useShowTopics } from '@renderer/hooks/useStore'
 import { EVENT_NAMES, EventEmitter } from '@renderer/services/EventService'
+import { useAppDispatch } from '@renderer/store'
+import { setActiveTopicOrSessionAction } from '@renderer/store/runtime'
 import type { Assistant, Topic } from '@renderer/types'
 import { Tooltip } from 'antd'
 import { t } from 'i18next'
@@ -30,6 +33,7 @@ const HeaderNavbar: FC<Props> = ({ activeAssistant, setActiveAssistant, activeTo
   const { topicPosition } = useSettings()
   const { toggleShowTopics } = useShowTopics()
   const { isTopNavbar } = useNavbarPosition()
+  const dispatch = useAppDispatch()
 
   useShortcut('toggle_show_assistants', toggleShowAssistants)
 
@@ -43,6 +47,18 @@ const HeaderNavbar: FC<Props> = ({ activeAssistant, setActiveAssistant, activeTo
 
   useShortcut('search_message', () => {
     SearchPopup.show()
+  })
+
+  useShortcut('open_launcher', () => {
+    LauncherPopup.show({
+      activeAssistant,
+      activeTopic,
+      onSelect: (assistant, topic) => {
+        setActiveAssistant(assistant)
+        setActiveTopic(topic)
+        dispatch(setActiveTopicOrSessionAction('topic'))
+      }
+    })
   })
 
   const onShowAssistantsDrawer = () => {

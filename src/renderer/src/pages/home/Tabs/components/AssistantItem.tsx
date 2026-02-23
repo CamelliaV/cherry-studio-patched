@@ -97,7 +97,7 @@ const AssistantItem: FC<AssistantItemProps> = ({
 
   const menuItems = useMemo(
     () =>
-      getMenuItems({
+      getAssistantMenuItems({
         assistant,
         t,
         allTags,
@@ -187,7 +187,7 @@ const AssistantItem: FC<AssistantItemProps> = ({
 }
 
 // 提取排序相关的工具函数
-const sortAssistantsByPinyin = (assistants: Assistant[], isAscending: boolean) => {
+export const sortAssistantsByPinyin = (assistants: Assistant[], isAscending: boolean) => {
   return [...assistants].sort((a, b) => {
     const pinyinA = tinyPinyin.convertToPinyin(a.name, '', true)
     const pinyinB = tinyPinyin.convertToPinyin(b.name, '', true)
@@ -260,7 +260,7 @@ const createTagMenuItems = (
 }
 
 // 提取创建菜单配置的函数
-function getMenuItems({
+export function getAssistantMenuItems({
   assistant,
   t,
   allTags,

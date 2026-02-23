@@ -57,6 +57,33 @@ This README reflects only the new functionality added in this patch series.
   - `pkgbuilds/arch/README.md`
 - Supports `x86_64` and `aarch64`.
 
+9. Launcher navigator (keyboard + mouse)
+- Added a dedicated third tab: `Open Launcher`.
+- Added launcher hotkey: `Ctrl+P` / `Cmd+P`.
+- Launcher supports assistant/topic search and keyboard navigation (`↑`, `↓`, `Enter`, `Esc`).
+
+10. Context menu parity across navigation surfaces
+- Right-click assistant/topic entries in conversation multi-tabs now reuse the same menus as the left sidebar.
+- Right-click assistant/topic entries in launcher tab and launcher popup now reuse the same menus as the left sidebar.
+- Assistant/topic editing and management actions are now consistent in all these entry points.
+
+11. Create assistant/topic directly from launcher
+- Added quick create actions inside launcher:
+  - `+ Assistant`
+  - `+ Topic` (under current active assistant)
+- New items are created and selected immediately for fast flow.
+
+12. Model-group provider visibility
+- Model-group member rows now display `Model | Provider`.
+- This makes inactive/failing provider sources easier to identify when groups contain similarly named models.
+
+13. Markdown export with image assets
+- Topic Markdown export now preserves image-only user inputs.
+- Export behavior:
+  - Pure text topic: only `.md`.
+  - Topic with uploaded image files: `.md` + sibling `<markdown-name>.assets/` folder, with Markdown image links pointing to copied files.
+  - URL-based images remain URL links in Markdown.
+
 ## Arch Linux Quick Install
 
 ```bash

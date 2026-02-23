@@ -207,6 +207,7 @@ const shortcutKeyMap = {
   label: 'settings.shortcuts.label',
   mini_window: 'settings.shortcuts.mini_window',
   new_topic: 'settings.shortcuts.new_topic',
+  open_launcher: 'settings.shortcuts.open_launcher',
   press_shortcut: 'settings.shortcuts.press_shortcut',
   reset_defaults: 'settings.shortcuts.reset_defaults',
   reset_defaults_confirm: 'settings.shortcuts.reset_defaults_confirm',

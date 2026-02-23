@@ -7,7 +7,7 @@ import MultiSelectActionPopup from '@renderer/components/Popups/MultiSelectionPo
 import PromptPopup from '@renderer/components/Popups/PromptPopup'
 import { QuickPanelProvider } from '@renderer/components/QuickPanel'
 import { useCreateDefaultSession } from '@renderer/hooks/agents/useCreateDefaultSession'
-import { useAssistant } from '@renderer/hooks/useAssistant'
+import { useAssistant, useAssistants } from '@renderer/hooks/useAssistant'
 import { useChatContext } from '@renderer/hooks/useChatContext'
 import { useRuntime } from '@renderer/hooks/useRuntime'
 import { useNavbarPosition, useSettings } from '@renderer/hooks/useSettings'
@@ -18,7 +18,7 @@ import { EVENT_NAMES, EventEmitter } from '@renderer/services/EventService'
 import type { Assistant, Topic } from '@renderer/types'
 import { classNames } from '@renderer/utils'
 import { buildAgentSessionTopicId } from '@renderer/utils/agentSession'
-import { Alert, Flex } from 'antd'
+import { Alert, Dropdown, Flex } from 'antd'
 import { debounce, throttle } from 'lodash'
 import { AnimatePresence, motion } from 'motion/react'
 import type { FC } from 'react'
@@ -35,6 +35,7 @@ import AgentSessionMessages from './Messages/AgentSessionMessages'
 import ChatNavigation from './Messages/ChatNavigation'
 import Messages from './Messages/Messages'
 import Tabs from './Tabs'
+import { useNavigatorContextMenus } from './Tabs/components/useNavigatorContextMenus'
 
 const logger = loggerService.withContext('Chat')
 const CONVERSATION_TABS_HEIGHT = 54
@@ -72,7 +73,9 @@ interface ConversationWorkspaceItem {
 }
 
 const Chat: FC<Props> = (props) => {
+  const { onConversationTabSelect } = props
   const { assistant, updateTopic } = useAssistant(props.assistant.id)
+  const { assistants } = useAssistants()
   const { t } = useTranslation()
   const { topicPosition, messageStyle, messageNavigation } = useSettings()
   const { showTopics } = useShowTopics()
@@ -195,6 +198,17 @@ const Chat: FC<Props> = (props) => {
     () => props.workspaces.find((workspace) => workspace.id === props.activeWorkspaceId),
     [props.activeWorkspaceId, props.workspaces]
   )
+  const handleContextMenuSelect = useCallback(
+    (nextAssistant: Assistant, nextTopic: Topic) => {
+      onConversationTabSelect(nextAssistant.id, nextTopic.id)
+    },
+    [onConversationTabSelect]
+  )
+  const { getAssistantContextMenuItems, getTopicContextMenuItems } = useNavigatorContextMenus({
+    activeAssistant: props.assistant,
+    activeTopic: props.activeTopic,
+    onSelect: handleContextMenuSelect
+  })
 
   const persistConversationTabsScroll = useMemo(
     () =>
@@ -352,6 +366,8 @@ const Chat: FC<Props> = (props) => {
                   <ConversationTabsContainer ref={conversationTabsRef} onScroll={handleConversationTabsScroll}>
                     {props.conversationTabs.map((tab) => {
                       const isActive = tab.id === props.activeConversationTabId
+                      const tabAssistant = assistants.find((candidate) => candidate.id === tab.assistantId)
+                      const tabTopic = tabAssistant?.topics.find((candidate) => candidate.id === tab.topicId)
 
                       return (
                         <ConversationTabButton
@@ -374,8 +390,24 @@ const Chat: FC<Props> = (props) => {
                           }}
                           onClick={() => props.onConversationTabSelect(tab.assistantId, tab.topicId)}>
                           <ConversationTabText>
-                            <ConversationTabTitle>{tab.topicName || tab.topicId}</ConversationTabTitle>
-                            <ConversationTabMeta>{tab.assistantName}</ConversationTabMeta>
+                            {tabAssistant && tabTopic ? (
+                              <Dropdown
+                                menu={{ items: getTopicContextMenuItems(tabAssistant, tabTopic) }}
+                                trigger={['contextMenu']}>
+                                <ConversationTabTitle>{tab.topicName || tab.topicId}</ConversationTabTitle>
+                              </Dropdown>
+                            ) : (
+                              <ConversationTabTitle>{tab.topicName || tab.topicId}</ConversationTabTitle>
+                            )}
+                            {tabAssistant ? (
+                              <Dropdown
+                                menu={{ items: getAssistantContextMenuItems(tabAssistant) }}
+                                trigger={['contextMenu']}>
+                                <ConversationTabMeta>{tab.assistantName}</ConversationTabMeta>
+                              </Dropdown>
+                            ) : (
+                              <ConversationTabMeta>{tab.assistantName}</ConversationTabMeta>
+                            )}
                           </ConversationTabText>
                           {props.conversationTabs.length > 1 && (
                             <ConversationTabClose
@@ -632,6 +664,7 @@ const ConversationTabText = styled.span`
 `
 
 const ConversationTabTitle = styled.span`
+  display: block;
   width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -641,6 +674,7 @@ const ConversationTabTitle = styled.span`
 `
 
 const ConversationTabMeta = styled.span`
+  display: block;
   width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
