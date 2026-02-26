@@ -100,6 +100,13 @@ const initialState: ShortcutsState = {
       system: false
     },
     {
+      key: 'copy_background_image_uri',
+      shortcut: ['CommandOrControl', 'Shift', 'U'],
+      editable: true,
+      enabled: true,
+      system: false
+    },
+    {
       key: 'copy_last_message',
       shortcut: ['CommandOrControl', 'Shift', 'C'],
       editable: true,

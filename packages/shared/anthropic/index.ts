@@ -16,6 +16,16 @@ import type { ModelMessage } from 'ai'
 
 const logger = loggerService.withContext('anthropic-sdk')
 
+export const CLAUDE_CODE_USER_AGENT = 'claude-cli/1.0.118 (external, sdk-ts)'
+
+export const CLAUDE_CODE_COMPAT_HEADERS: Record<string, string> = {
+  'user-agent': CLAUDE_CODE_USER_AGENT,
+  'x-app': 'cli',
+  'anthropic-dangerous-direct-browser-access': 'true',
+  'anthropic-beta':
+    'oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14'
+}
+
 const defaultClaudeCodeSystemPrompt = `You are Claude Code, Anthropic's official CLI for Claude.`
 
 const defaultClaudeCodeSystem: Array<TextBlockParam> = [
@@ -24,6 +34,20 @@ const defaultClaudeCodeSystem: Array<TextBlockParam> = [
     text: defaultClaudeCodeSystemPrompt
   }
 ]
+
+/**
+ * Merges two comma-separated anthropic-beta header values, deduplicating entries.
+ */
+function mergeAnthropicBeta(...values: string[]): string {
+  const set = new Set<string>()
+  for (const v of values) {
+    for (const part of v.split(',')) {
+      const trimmed = part.trim()
+      if (trimmed) set.add(trimmed)
+    }
+  }
+  return [...set].join(',')
+}
 
 /**
  * Creates and configures an Anthropic SDK client based on the provider configuration.
@@ -115,7 +139,15 @@ export function getSdkClient(
     baseURL,
     dangerouslyAllowBrowser: true,
     defaultHeaders: {
-      'anthropic-beta': 'output-128k-2025-02-19',
+      ...(provider.claudeCodeCompat
+        ? {
+            'anthropic-beta': mergeAnthropicBeta(
+              'output-128k-2025-02-19',
+              CLAUDE_CODE_COMPAT_HEADERS['anthropic-beta']
+            ),
+            ...Object.fromEntries(Object.entries(CLAUDE_CODE_COMPAT_HEADERS).filter(([k]) => k !== 'anthropic-beta'))
+          }
+        : { 'anthropic-beta': 'output-128k-2025-02-19' }),
       ...provider.extra_headers
     }
   })

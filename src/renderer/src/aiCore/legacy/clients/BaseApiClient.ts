@@ -50,6 +50,7 @@ import { isJSON, parseJSON } from '@renderer/utils'
 import { addAbortController, removeAbortController } from '@renderer/utils/abortController'
 import { findFileBlocks, getMainTextContent } from '@renderer/utils/messageUtils/find'
 import { isSupportServiceTierProvider } from '@renderer/utils/provider'
+import { CLAUDE_CODE_COMPAT_HEADERS } from '@shared/anthropic'
 import { defaultTimeout } from '@shared/config/constant'
 import { defaultAppHeaders } from '@shared/utils'
 import { isEmpty } from 'lodash'
@@ -191,7 +192,7 @@ export abstract class BaseApiClient<
 
   public defaultHeaders() {
     return {
-      ...defaultAppHeaders(),
+      ...(this.provider.claudeCodeCompat ? CLAUDE_CODE_COMPAT_HEADERS : defaultAppHeaders()),
       'X-Api-Key': this.apiKey
     }
   }

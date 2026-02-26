@@ -176,14 +176,46 @@ const LauncherNavigator: React.FC<LauncherNavigatorProps> = ({
     [highlightedKey, launcherEntries]
   )
 
+  const createTopicForAssistant = useCallback(
+    async (assistant: Assistant) => {
+      if (isCreatingTopic) {
+        return
+      }
+
+      setIsCreatingTopic(true)
+      try {
+        const newTopic = getDefaultTopic(assistant.id)
+        await db.topics.add({ id: newTopic.id, messages: [] })
+
+        if (assistant.defaultModel) {
+          dispatch(setModelAction({ assistantId: assistant.id, model: assistant.defaultModel }))
+        }
+
+        dispatch(addTopicAction({ assistantId: assistant.id, topic: newTopic }))
+        onSelect(assistant, newTopic)
+      } catch (error) {
+        logger.error('Failed to create topic from launcher', error as Error)
+        window.toast.error(t('common.error'))
+      } finally {
+        setIsCreatingTopic(false)
+      }
+    },
+    [dispatch, isCreatingTopic, onSelect, t]
+  )
+
   const selectEntry = useCallback(
     (entry: LauncherEntry) => {
+      if (entry.type === 'assistant') {
+        void createTopicForAssistant(entry.assistant)
+        return
+      }
+
       onSelect(entry.assistant, entry.topic)
       if (mode === 'popup') {
         onClose?.()
       }
     },
-    [mode, onClose, onSelect]
+    [createTopicForAssistant, mode, onClose, onSelect]
   )
 
   const onSearchInputKeyDown = useCallback(
@@ -233,28 +265,12 @@ const LauncherNavigator: React.FC<LauncherNavigatorProps> = ({
   }, [isCreatingAssistant, onSelect])
 
   const handleCreateTopic = useCallback(async () => {
-    if (!topicTargetAssistant || isCreatingTopic) {
+    if (!topicTargetAssistant) {
       return
     }
 
-    setIsCreatingTopic(true)
-    try {
-      const newTopic = getDefaultTopic(topicTargetAssistant.id)
-      await db.topics.add({ id: newTopic.id, messages: [] })
-
-      if (topicTargetAssistant.defaultModel) {
-        dispatch(setModelAction({ assistantId: topicTargetAssistant.id, model: topicTargetAssistant.defaultModel }))
-      }
-
-      dispatch(addTopicAction({ assistantId: topicTargetAssistant.id, topic: newTopic }))
-      onSelect(topicTargetAssistant, newTopic)
-    } catch (error) {
-      logger.error('Failed to create topic from launcher', error as Error)
-      window.toast.error(t('common.error'))
-    } finally {
-      setIsCreatingTopic(false)
-    }
-  }, [dispatch, isCreatingTopic, onSelect, t, topicTargetAssistant])
+    await createTopicForAssistant(topicTargetAssistant)
+  }, [createTopicForAssistant, topicTargetAssistant])
 
   return (
     <Container className={className} data-mode={mode}>

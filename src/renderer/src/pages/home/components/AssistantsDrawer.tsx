@@ -12,6 +12,7 @@ interface ShowParams {
   setActiveAssistant: (assistant: Assistant) => void
   activeTopic: Topic
   setActiveTopic: (topic: Topic) => void
+  activateConversation?: (assistant: Assistant, topic: Topic) => void
 }
 
 interface Props extends ShowParams {
@@ -23,6 +24,7 @@ const PopupContainer: React.FC<Props> = ({
   setActiveAssistant,
   activeTopic,
   setActiveTopic,
+  activateConversation,
   resolve
 }) => {
   const [open, setOpen] = useState(true)
@@ -68,6 +70,14 @@ const PopupContainer: React.FC<Props> = ({
           setActiveTopic(topic)
           onClose()
         }}
+        activateConversation={
+          activateConversation
+            ? (assistant, topic) => {
+                activateConversation(assistant, topic)
+                onClose()
+              }
+            : undefined
+        }
         position="left"
       />
     </Drawer>

@@ -534,6 +534,13 @@ const ProviderSetting: FC<Props> = ({ providerId }) => {
                   <HelpTooltip title={t('settings.provider.api.url.tip')}></HelpTooltip>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Tooltip title={t('settings.provider.claude_code_compat.tooltip')}>
+                    <Switch
+                      size="small"
+                      value={provider.claudeCodeCompat ?? false}
+                      onChange={(checked) => updateProvider({ claudeCodeCompat: checked })}
+                    />
+                  </Tooltip>
                   <Button
                     type="text"
                     onClick={() => CustomHeaderPopup.show({ provider })}

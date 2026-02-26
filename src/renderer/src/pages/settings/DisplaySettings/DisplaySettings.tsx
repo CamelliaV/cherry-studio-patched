@@ -1,3 +1,4 @@
+import { loggerService } from '@logger'
 import CodeEditor from '@renderer/components/CodeEditor'
 import { ResetIcon } from '@renderer/components/Icons'
 import { HStack } from '@renderer/components/Layout'
@@ -8,10 +9,15 @@ import { useTheme } from '@renderer/context/ThemeProvider'
 import { useNavbarPosition, useSettings } from '@renderer/hooks/useSettings'
 import { useTimer } from '@renderer/hooks/useTimer'
 import useUserTheme from '@renderer/hooks/useUserTheme'
+import { backgroundSlideshowService } from '@renderer/services/BackgroundSlideshowService'
 import { useAppDispatch } from '@renderer/store'
 import type { AssistantIconType } from '@renderer/store/settings'
 import {
   setAssistantIconType,
+  setBackgroundSlideshowDirectories,
+  setBackgroundSlideshowEnabled,
+  setBackgroundSlideshowIntervalSeconds,
+  setBackgroundSlideshowOpacity,
   setClickAssistantToShowTopic,
   setCustomCss,
   setPinTopicsToTop,
@@ -19,7 +25,7 @@ import {
   setSidebarIcons
 } from '@renderer/store/settings'
 import { ThemeMode } from '@renderer/types'
-import { Button, ColorPicker, Segmented, Select, Switch, Tooltip } from 'antd'
+import { Button, ColorPicker, InputNumber, Segmented, Select, Slider, Switch, Tooltip } from 'antd'
 import { Minus, Monitor, Moon, Plus, Sun } from 'lucide-react'
 import type { FC } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -56,6 +62,11 @@ const ColorCircle = styled.div<{ color: string; isActive?: boolean }>`
   }
 `
 
+const logger = loggerService.withContext('DisplaySettings')
+const MIN_BACKGROUND_INTERVAL_SECONDS = 5
+const MIN_BACKGROUND_OPACITY_PERCENT = 0
+const MAX_BACKGROUND_OPACITY_PERCENT = 100
+
 const DisplaySettings: FC = () => {
   const {
     windowStyle,
@@ -71,7 +82,11 @@ const DisplaySettings: FC = () => {
     assistantIconType,
     userTheme,
     useSystemTitleBar,
-    setUseSystemTitleBar
+    setUseSystemTitleBar,
+    backgroundSlideshowEnabled,
+    backgroundSlideshowIntervalSeconds,
+    backgroundSlideshowDirectories,
+    backgroundSlideshowOpacity
   } = useSettings()
   const { navbarPosition, setNavbarPosition } = useNavbarPosition()
   const { theme, settedTheme } = useTheme()
@@ -84,6 +99,7 @@ const DisplaySettings: FC = () => {
   const [visibleIcons, setVisibleIcons] = useState(sidebarIcons?.visible || DEFAULT_SIDEBAR_ICONS)
   const [disabledIcons, setDisabledIcons] = useState(sidebarIcons?.disabled || [])
   const [fontList, setFontList] = useState<string[]>([])
+  const [currentBackgroundImageUri, setCurrentBackgroundImageUri] = useState<string | null>(null)
 
   const handleWindowStyleChange = useCallback(
     (checked: boolean) => {
@@ -219,6 +235,81 @@ const DisplaySettings: FC = () => {
     ],
     [t]
   )
+
+  useEffect(() => {
+    const unsubscribe = backgroundSlideshowService.subscribe((currentUri) => {
+      setCurrentBackgroundImageUri(currentUri)
+    })
+    return () => unsubscribe()
+  }, [])
+
+  const handleAddBackgroundDirectory = useCallback(async () => {
+    try {
+      const selected = await window.api.file.selectFolder()
+      if (!selected) {
+        return
+      }
+      if (backgroundSlideshowDirectories.includes(selected)) {
+        window.toast.warning(t('settings.display.background.duplicate_directory'))
+        return
+      }
+      dispatch(setBackgroundSlideshowDirectories([...backgroundSlideshowDirectories, selected]))
+    } catch (error) {
+      logger.error('Failed to add background slideshow directory', error as Error)
+      window.toast.error(t('common.error'))
+    }
+  }, [backgroundSlideshowDirectories, dispatch, t])
+
+  const handleRemoveBackgroundDirectory = useCallback(
+    (directory: string) => {
+      dispatch(setBackgroundSlideshowDirectories(backgroundSlideshowDirectories.filter((item) => item !== directory)))
+    },
+    [backgroundSlideshowDirectories, dispatch]
+  )
+
+  const handleBackgroundSlideshowIntervalChange = useCallback(
+    (value: number | null) => {
+      const intervalSeconds = Math.max(
+        MIN_BACKGROUND_INTERVAL_SECONDS,
+        Number.isFinite(value) ? Math.floor(value as number) : backgroundSlideshowIntervalSeconds
+      )
+      dispatch(setBackgroundSlideshowIntervalSeconds(intervalSeconds))
+    },
+    [backgroundSlideshowIntervalSeconds, dispatch]
+  )
+
+  const handleNextBackgroundImage = useCallback(async () => {
+    try {
+      const nextImage = await backgroundSlideshowService.nextImage()
+      if (!nextImage) {
+        window.toast.warning(t('settings.display.background.no_images'))
+      }
+    } catch (error) {
+      logger.error('Failed to switch background slideshow image', error as Error)
+      window.toast.error(t('common.error'))
+    }
+  }, [t])
+
+  const handleBackgroundSlideshowOpacityChange = useCallback(
+    (opacityPercent: number) => {
+      const normalizedOpacity = Math.min(1, Math.max(0, Math.round(opacityPercent) / MAX_BACKGROUND_OPACITY_PERCENT))
+      dispatch(setBackgroundSlideshowOpacity(normalizedOpacity))
+    },
+    [dispatch]
+  )
+
+  const handleCopyCurrentBackgroundImageUri = useCallback(async () => {
+    if (!currentBackgroundImageUri) {
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(currentBackgroundImageUri)
+      window.toast.success(t('common.copied'))
+    } catch (error) {
+      logger.error('Failed to copy current background slideshow URI', error as Error)
+      window.toast.error(t('common.error'))
+    }
+  }, [currentBackgroundImageUri, t])
 
   const renderFontOption = useCallback(
     (font: string) => (
@@ -451,6 +542,82 @@ const DisplaySettings: FC = () => {
           />
         </SettingRow>
       </SettingGroup>
+      <SettingGroup theme={theme}>
+        <SettingTitle>{t('settings.display.background.title')}</SettingTitle>
+        <SettingDivider />
+        <SettingRow>
+          <SettingRowTitle>{t('settings.display.background.enable')}</SettingRowTitle>
+          <Switch
+            checked={backgroundSlideshowEnabled}
+            onChange={(checked) => dispatch(setBackgroundSlideshowEnabled(checked))}
+          />
+        </SettingRow>
+        <SettingDivider />
+        <SettingRow>
+          <SettingRowTitle>{t('settings.display.background.interval_seconds')}</SettingRowTitle>
+          <HStack gap="8px" alignItems="center">
+            <InputNumber
+              min={MIN_BACKGROUND_INTERVAL_SECONDS}
+              value={backgroundSlideshowIntervalSeconds}
+              onChange={handleBackgroundSlideshowIntervalChange}
+              disabled={!backgroundSlideshowEnabled}
+            />
+            <span>{t('settings.display.background.seconds')}</span>
+          </HStack>
+        </SettingRow>
+        <SettingDivider />
+        <SettingRow>
+          <SettingRowTitle>{t('settings.display.background.opacity')}</SettingRowTitle>
+          <HStack gap="8px" alignItems="center">
+            <Slider
+              min={MIN_BACKGROUND_OPACITY_PERCENT}
+              max={MAX_BACKGROUND_OPACITY_PERCENT}
+              value={Math.round(backgroundSlideshowOpacity * MAX_BACKGROUND_OPACITY_PERCENT)}
+              onChange={handleBackgroundSlideshowOpacityChange}
+              disabled={!backgroundSlideshowEnabled}
+              style={{ width: 180 }}
+            />
+            <span>{Math.round(backgroundSlideshowOpacity * MAX_BACKGROUND_OPACITY_PERCENT)}%</span>
+          </HStack>
+        </SettingRow>
+        <SettingDivider />
+        <SettingRow>
+          <SettingRowTitle>{t('settings.display.background.directories')}</SettingRowTitle>
+          <Button onClick={handleAddBackgroundDirectory}>{t('settings.display.background.add_directory')}</Button>
+        </SettingRow>
+        <BackgroundDirectoriesList>
+          {backgroundSlideshowDirectories.length === 0 && (
+            <BackgroundDirectoryEmpty>{t('settings.display.background.empty_directories')}</BackgroundDirectoryEmpty>
+          )}
+          {backgroundSlideshowDirectories.map((directory) => (
+            <BackgroundDirectoryItem key={directory}>
+              <BackgroundDirectoryPath title={directory}>{directory}</BackgroundDirectoryPath>
+              <Button size="small" danger type="text" onClick={() => handleRemoveBackgroundDirectory(directory)}>
+                {t('common.delete')}
+              </Button>
+            </BackgroundDirectoryItem>
+          ))}
+        </BackgroundDirectoriesList>
+        <SettingDivider />
+        <SettingRow>
+          <SettingRowTitle>{t('settings.display.background.current_image_uri')}</SettingRowTitle>
+          <BackgroundCurrentUri title={currentBackgroundImageUri || ''}>
+            {currentBackgroundImageUri || t('settings.display.background.current_image_uri_empty')}
+          </BackgroundCurrentUri>
+        </SettingRow>
+        <SettingDivider />
+        <SettingRow>
+          <SettingRowTitle>{t('settings.display.background.actions')}</SettingRowTitle>
+          <HStack gap="8px" alignItems="center">
+            <Button onClick={handleNextBackgroundImage} disabled={!backgroundSlideshowEnabled}>
+              {t('settings.display.background.next_image')}
+            </Button>
+            <Button onClick={handleCopyCurrentBackgroundImageUri} disabled={!currentBackgroundImageUri}>
+              {t('common.copy')}
+            </Button>
+          </HStack>
+        </SettingRow>
+      </SettingGroup>
       {navbarPosition === 'left' && (
         <SettingGroup theme={theme}>
           <SettingTitle
@@ -529,6 +696,44 @@ const SelectRow = styled.div`
   align-items: center;
   justify-content: flex-end;
   width: 380px;
+`
+
+const BackgroundDirectoriesList = styled.ul`
+  margin: 8px 0 0 0;
+  padding: 0;
+  list-style: none;
+`
+
+const BackgroundDirectoryItem = styled.li`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+`
+
+const BackgroundDirectoryPath = styled.span`
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+`
+
+const BackgroundDirectoryEmpty = styled.li`
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+  font-size: 12px;
+  padding: 4px 0;
+`
+
+const BackgroundCurrentUri = styled.span`
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
 `
 
 export default DisplaySettings

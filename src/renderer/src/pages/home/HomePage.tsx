@@ -1,9 +1,12 @@
+import { loggerService } from '@logger'
 import { ErrorBoundary } from '@renderer/components/ErrorBoundary'
 import { useAgentSessionInitializer } from '@renderer/hooks/agents/useAgentSessionInitializer'
 import { useAssistants } from '@renderer/hooks/useAssistant'
 import { useRuntime } from '@renderer/hooks/useRuntime'
 import { useNavbarPosition, useSettings } from '@renderer/hooks/useSettings'
+import { useShortcut } from '@renderer/hooks/useShortcuts'
 import { useActiveTopic } from '@renderer/hooks/useTopic'
+import { backgroundSlideshowService } from '@renderer/services/BackgroundSlideshowService'
 import NavigationService from '@renderer/services/NavigationService'
 import { newMessagesActions } from '@renderer/store/newMessage'
 import { setActiveAgentId, setActiveTopicOrSessionAction } from '@renderer/store/runtime'
@@ -12,6 +15,7 @@ import { MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, SECOND_MIN_WINDOW_WIDTH } from '@s
 import { AnimatePresence, motion } from 'motion/react'
 import type { FC } from 'react'
 import { startTransition, useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useDispatch } from 'react-redux'
 import { useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
@@ -21,9 +25,35 @@ import Navbar from './Navbar'
 import HomeTabs from './Tabs'
 
 let _activeAssistant: Assistant
+const logger = loggerService.withContext('HomePage')
 const buildConversationTabId = (assistantId: string, topicId: string) => `${assistantId}:${topicId}`
 const buildWorkspaceName = (index: number) => `Workspace ${index}`
 const createWorkspaceId = () => `workspace-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+const resolveLocalPathFromFileUri = (uri: string): string | null => {
+  if (!uri.startsWith('file://')) {
+    return null
+  }
+
+  try {
+    const url = new URL(uri)
+    if (url.protocol !== 'file:') {
+      return null
+    }
+
+    const pathname = decodeURIComponent(url.pathname)
+    if (url.hostname) {
+      return `//${url.hostname}${pathname}`
+    }
+
+    return /^\/[a-zA-Z]:\//.test(pathname) ? pathname.slice(1) : pathname
+  } catch (error) {
+    logger.warn('Failed to resolve local path from background image URI', {
+      uri,
+      error
+    })
+    return null
+  }
+}
 
 interface ConversationTabRef {
   assistantId: string
@@ -233,6 +263,7 @@ const HomePage: FC = () => {
   const { assistants } = useAssistants()
   const navigate = useNavigate()
   const { isLeftNavbar } = useNavbarPosition()
+  const { t } = useTranslation()
 
   // Initialize agent session hook
   useAgentSessionInitializer()
@@ -316,6 +347,27 @@ const HomePage: FC = () => {
   const { chat } = useRuntime()
   const { activeTopicOrSession } = chat
 
+  useShortcut('copy_background_image_uri', async () => {
+    const currentBackgroundImageUri = backgroundSlideshowService.getCurrentImageUri()
+    if (!currentBackgroundImageUri) {
+      window.toast.warning(t('settings.display.background.current_image_uri_empty'))
+      return
+    }
+
+    const localImagePath = resolveLocalPathFromFileUri(currentBackgroundImageUri)
+    if (!localImagePath) {
+      window.toast.error(t('common.error'))
+      return
+    }
+
+    try {
+      await window.api.file.showInFolder(localImagePath)
+    } catch (error) {
+      logger.error('Failed to reveal background image in folder with shortcut', error as Error)
+      window.toast.error(t('common.error'))
+    }
+  })
+
   const activeWorkspace = useMemo(
     () => conversationWorkspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? conversationWorkspaces[0],
     [activeWorkspaceId, conversationWorkspaces]
@@ -398,26 +450,24 @@ const HomePage: FC = () => {
         return
       }
 
-      startTransition(() => {
-        if (workspaceId !== activeWorkspaceId) {
-          setActiveWorkspaceId(workspaceId)
-        }
+      if (workspaceId !== activeWorkspaceId) {
+        setActiveWorkspaceId(workspaceId)
+      }
 
-        if (targetAssistant.id !== activeAssistant?.id) {
-          _setActiveAssistant(targetAssistant)
-          if (targetAssistant.id !== 'fake') {
-            dispatch(setActiveAgentId(null))
-          }
+      if (targetAssistant.id !== activeAssistant?.id) {
+        _setActiveAssistant(targetAssistant)
+        if (targetAssistant.id !== 'fake') {
+          dispatch(setActiveAgentId(null))
         }
+      }
 
-        setWorkspaceActiveConversation(workspaceId, {
-          assistantId: targetAssistant.id,
-          topicId: targetTopic.id
-        })
-        _setActiveTopic((prev) => (targetTopic.id === prev.id ? prev : targetTopic))
-        dispatch(newMessagesActions.setTopicFulfilled({ topicId: targetTopic.id, fulfilled: false }))
-        dispatch(setActiveTopicOrSessionAction('topic'))
+      setWorkspaceActiveConversation(workspaceId, {
+        assistantId: targetAssistant.id,
+        topicId: targetTopic.id
       })
+      _setActiveTopic((prev) => (targetTopic.id === prev.id ? prev : targetTopic))
+      dispatch(newMessagesActions.setTopicFulfilled({ topicId: targetTopic.id, fulfilled: false }))
+      dispatch(setActiveTopicOrSessionAction('topic'))
     },
     [
       activeAssistant?.id,
@@ -679,16 +729,26 @@ const HomePage: FC = () => {
   )
 
   useEffect(() => {
+    const currentActiveTab =
+      activeAssistant?.id && activeTopic?.id
+        ? {
+            assistantId: activeAssistant.id,
+            topicId: activeTopic.id
+          }
+        : undefined
+
     setConversationWorkspaces((prev) =>
       normalizeConversationWorkspaces(
         prev.map((workspace) => {
           const tabs = workspace.tabs.filter((tab) => !!findConversationByTab(tab))
+          const preferredActive =
+            workspace.id === activeWorkspaceId && currentActiveTab ? currentActiveTab : workspace.active
           const active =
-            workspace.active &&
+            preferredActive &&
             tabs.some(
-              (tab) => tab.assistantId === workspace.active?.assistantId && tab.topicId === workspace.active?.topicId
+              (tab) => tab.assistantId === preferredActive.assistantId && tab.topicId === preferredActive.topicId
             )
-              ? workspace.active
+              ? preferredActive
               : tabs[0]
 
           return {
@@ -699,7 +759,7 @@ const HomePage: FC = () => {
         })
       )
     )
-  }, [assistants, findConversationByTab])
+  }, [activeAssistant?.id, activeTopic?.id, activeWorkspaceId, assistants, findConversationByTab])
 
   useEffect(() => {
     if (conversationWorkspaces.length === 0) {
@@ -789,6 +849,7 @@ const HomePage: FC = () => {
                   activeTopic={activeTopic}
                   setActiveAssistant={setActiveAssistant}
                   setActiveTopic={setActiveTopic}
+                  activateConversation={activateConversation}
                   position="left"
                 />
               </motion.div>
@@ -801,6 +862,7 @@ const HomePage: FC = () => {
             activeTopic={activeTopic}
             setActiveTopic={setActiveTopic}
             setActiveAssistant={setActiveAssistant}
+            activateConversation={activateConversation}
             conversationTabs={conversationTabs}
             activeConversationTabId={activeConversationTabId}
             workspaces={workspaceItems}

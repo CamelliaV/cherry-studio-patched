@@ -40,12 +40,14 @@ import { useNavigatorContextMenus } from './Tabs/components/useNavigatorContextM
 const logger = loggerService.withContext('Chat')
 const CONVERSATION_TABS_HEIGHT = 54
 const CONVERSATION_TABS_SCROLL_KEY = 'home:conversation-tabs:scroll-left:v1'
+const CONVERSATION_TABS_SWITCH_THROTTLE_MS = 180
 
 interface Props {
   assistant: Assistant
   activeTopic: Topic
   setActiveTopic: (topic: Topic) => void
   setActiveAssistant: (assistant: Assistant) => void
+  activateConversation: (assistant: Assistant, topic: Topic) => void
   conversationTabs: ConversationTabItem[]
   activeConversationTabId: string
   workspaces: ConversationWorkspaceItem[]
@@ -73,7 +75,7 @@ interface ConversationWorkspaceItem {
 }
 
 const Chat: FC<Props> = (props) => {
-  const { onConversationTabSelect } = props
+  const { conversationTabs, activeConversationTabId, onConversationTabSelect } = props
   const { assistant, updateTopic } = useAssistant(props.assistant.id)
   const { assistants } = useAssistants()
   const { t } = useTranslation()
@@ -193,7 +195,7 @@ const Chat: FC<Props> = (props) => {
 
   const mainHeight = isTopNavbar ? 'calc(100vh - var(--navbar-height) - 6px)' : 'calc(100vh - var(--navbar-height))'
   const showWorkspaceSwitcher = activeTopicOrSession === 'topic' && props.workspaces.length > 0
-  const showConversationTabs = activeTopicOrSession === 'topic' && props.conversationTabs.length > 0
+  const showConversationTabs = activeTopicOrSession === 'topic' && conversationTabs.length > 0
   const activeWorkspace = useMemo(
     () => props.workspaces.find((workspace) => workspace.id === props.activeWorkspaceId),
     [props.activeWorkspaceId, props.workspaces]
@@ -239,6 +241,68 @@ const Chat: FC<Props> = (props) => {
     [persistConversationTabsScroll]
   )
 
+  const switchConversationTabByOffset = useCallback(
+    (offset: number) => {
+      if (conversationTabs.length <= 1) {
+        return
+      }
+
+      const currentIndex = conversationTabs.findIndex((tab) => tab.id === activeConversationTabId)
+      if (currentIndex === -1) {
+        return
+      }
+
+      const normalizedOffset = offset >= 0 ? Math.ceil(offset) : Math.floor(offset)
+      if (normalizedOffset === 0) {
+        return
+      }
+
+      const nextIndex = (currentIndex + normalizedOffset + conversationTabs.length) % conversationTabs.length
+      const nextTab = conversationTabs[nextIndex]
+      if (!nextTab) {
+        return
+      }
+
+      onConversationTabSelect(nextTab.assistantId, nextTab.topicId)
+    },
+    [activeConversationTabId, conversationTabs, onConversationTabSelect]
+  )
+
+  const throttledWheelTabSwitch = useMemo(
+    () =>
+      throttle(
+        (delta: number) => {
+          switchConversationTabByOffset(delta > 0 ? 1 : -1)
+        },
+        CONVERSATION_TABS_SWITCH_THROTTLE_MS,
+        { leading: true, trailing: false }
+      ),
+    [switchConversationTabByOffset]
+  )
+
+  useEffect(() => {
+    return () => {
+      throttledWheelTabSwitch.cancel()
+    }
+  }, [throttledWheelTabSwitch])
+
+  const handleConversationTabsWheel = useCallback(
+    (event: React.WheelEvent<HTMLDivElement>) => {
+      if (conversationTabs.length <= 1) {
+        return
+      }
+
+      const dominantDelta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX
+      if (Math.abs(dominantDelta) < 3) {
+        return
+      }
+
+      event.preventDefault()
+      throttledWheelTabSwitch(dominantDelta)
+    },
+    [conversationTabs.length, throttledWheelTabSwitch]
+  )
+
   useEffect(() => {
     return () => {
       persistConversationTabsScroll.flush()
@@ -253,7 +317,33 @@ const Chat: FC<Props> = (props) => {
 
     requestAnimationFrame(restoreConversationTabsScroll)
     setTimeoutTimer('chat:restoreConversationTabsScroll', restoreConversationTabsScroll, 80)
-  }, [props.conversationTabs.length, restoreConversationTabsScroll, setTimeoutTimer, showConversationTabs])
+  }, [conversationTabs.length, restoreConversationTabsScroll, setTimeoutTimer, showConversationTabs])
+
+  useHotkeys(
+    'ctrl+tab',
+    (event) => {
+      event.preventDefault()
+      switchConversationTabByOffset(1)
+    },
+    {
+      enabled: showConversationTabs && conversationTabs.length > 1,
+      preventDefault: true,
+      enableOnFormTags: true
+    }
+  )
+
+  useHotkeys(
+    'ctrl+shift+tab',
+    (event) => {
+      event.preventDefault()
+      switchConversationTabByOffset(-1)
+    },
+    {
+      enabled: showConversationTabs && conversationTabs.length > 1,
+      preventDefault: true,
+      enableOnFormTags: true
+    }
+  )
 
   const handleRenameWorkspace = useCallback(async () => {
     if (!activeWorkspace) {
@@ -321,6 +411,7 @@ const Chat: FC<Props> = (props) => {
                   activeTopic={props.activeTopic}
                   setActiveTopic={props.setActiveTopic}
                   setActiveAssistant={props.setActiveAssistant}
+                  activateConversation={props.activateConversation}
                   position="left"
                 />
                 {showWorkspaceSwitcher && (
@@ -363,9 +454,12 @@ const Chat: FC<Props> = (props) => {
                   </WorkspaceSwitcherContainer>
                 )}
                 {showConversationTabs && (
-                  <ConversationTabsContainer ref={conversationTabsRef} onScroll={handleConversationTabsScroll}>
-                    {props.conversationTabs.map((tab) => {
-                      const isActive = tab.id === props.activeConversationTabId
+                  <ConversationTabsContainer
+                    ref={conversationTabsRef}
+                    onScroll={handleConversationTabsScroll}
+                    onWheel={handleConversationTabsWheel}>
+                    {conversationTabs.map((tab) => {
+                      const isActive = tab.id === activeConversationTabId
                       const tabAssistant = assistants.find((candidate) => candidate.id === tab.assistantId)
                       const tabTopic = tabAssistant?.topics.find((candidate) => candidate.id === tab.topicId)
 
@@ -375,13 +469,13 @@ const Chat: FC<Props> = (props) => {
                           type="button"
                           $active={isActive}
                           onMouseDown={(event) => {
-                            if (event.button !== 1 || props.conversationTabs.length <= 1) {
+                            if (event.button !== 1 || conversationTabs.length <= 1) {
                               return
                             }
                             event.preventDefault()
                           }}
                           onAuxClick={(event) => {
-                            if (event.button !== 1 || props.conversationTabs.length <= 1) {
+                            if (event.button !== 1 || conversationTabs.length <= 1) {
                               return
                             }
                             event.preventDefault()
@@ -389,27 +483,31 @@ const Chat: FC<Props> = (props) => {
                             props.onConversationTabClose(tab.assistantId, tab.topicId)
                           }}
                           onClick={() => props.onConversationTabSelect(tab.assistantId, tab.topicId)}>
-                          <ConversationTabText>
+                          <ConversationTabText $active={isActive}>
                             {tabAssistant && tabTopic ? (
                               <Dropdown
                                 menu={{ items: getTopicContextMenuItems(tabAssistant, tabTopic) }}
                                 trigger={['contextMenu']}>
-                                <ConversationTabTitle>{tab.topicName || tab.topicId}</ConversationTabTitle>
+                                <ConversationTabTitle $active={isActive}>
+                                  {tab.topicName || tab.topicId}
+                                </ConversationTabTitle>
                               </Dropdown>
                             ) : (
-                              <ConversationTabTitle>{tab.topicName || tab.topicId}</ConversationTabTitle>
+                              <ConversationTabTitle $active={isActive}>
+                                {tab.topicName || tab.topicId}
+                              </ConversationTabTitle>
                             )}
                             {tabAssistant ? (
                               <Dropdown
                                 menu={{ items: getAssistantContextMenuItems(tabAssistant) }}
                                 trigger={['contextMenu']}>
-                                <ConversationTabMeta>{tab.assistantName}</ConversationTabMeta>
+                                <ConversationTabMeta $active={isActive}>{tab.assistantName}</ConversationTabMeta>
                               </Dropdown>
                             ) : (
-                              <ConversationTabMeta>{tab.assistantName}</ConversationTabMeta>
+                              <ConversationTabMeta $active={isActive}>{tab.assistantName}</ConversationTabMeta>
                             )}
                           </ConversationTabText>
-                          {props.conversationTabs.length > 1 && (
+                          {conversationTabs.length > 1 && (
                             <ConversationTabClose
                               type="button"
                               onClick={(event) => {
@@ -491,6 +589,7 @@ const Chat: FC<Props> = (props) => {
                 activeTopic={props.activeTopic}
                 setActiveAssistant={props.setActiveAssistant}
                 setActiveTopic={props.setActiveTopic}
+                activateConversation={props.activateConversation}
                 position="right"
               />
             </motion.div>
@@ -631,30 +730,87 @@ const ConversationTabButton = styled.button<{ $active: boolean }>`
   border: 1px solid
     ${(props) =>
       props.$active
-        ? 'color-mix(in srgb, var(--color-primary) 62%, transparent)'
+        ? 'color-mix(in srgb, var(--color-primary) 82%, transparent)'
         : 'color-mix(in srgb, var(--color-border) 55%, transparent)'};
-  background: transparent;
+  background: ${(props) =>
+    props.$active
+      ? 'linear-gradient(145deg, color-mix(in srgb, var(--color-primary) 26%, transparent), color-mix(in srgb, var(--color-primary) 8%, transparent))'
+      : 'transparent'};
   color: var(--color-text);
   cursor: pointer;
   text-align: left;
+  position: relative;
+  overflow: hidden;
   transition:
     border-color 0.15s ease,
     background-color 0.15s ease,
     box-shadow 0.15s ease,
     transform 0.15s ease;
   box-shadow: ${(props) =>
-    props.$active ? '0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, transparent)' : 'none'};
+    props.$active
+      ? '0 0 0 1px color-mix(in srgb, var(--color-primary) 68%, transparent), 0 6px 16px color-mix(in srgb, var(--color-primary) 22%, transparent), inset 0 -2px 0 color-mix(in srgb, var(--color-primary) 95%, transparent)'
+      : 'none'};
+  transform: ${(props) => (props.$active ? 'translateY(-1px)' : 'translateY(0)')};
   scroll-snap-align: start;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: ${(props) => (props.$active ? 1 : 0)};
+    background: linear-gradient(
+      120deg,
+      color-mix(in srgb, white 22%, transparent) 0%,
+      transparent 42%,
+      color-mix(in srgb, var(--color-primary) 35%, transparent) 100%
+    );
+    transition: opacity 0.15s ease;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 9px;
+    right: 9px;
+    bottom: 0;
+    height: 2px;
+    border-radius: 2px;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--color-primary) 25%, transparent),
+      color-mix(in srgb, var(--color-primary) 100%, transparent),
+      color-mix(in srgb, var(--color-primary) 25%, transparent)
+    );
+    opacity: ${(props) => (props.$active ? 1 : 0)};
+    transition: opacity 0.15s ease;
+  }
 
   &:hover {
     transform: translateY(-1px);
     border-color: color-mix(in srgb, var(--color-primary) 42%, transparent);
-    background: transparent;
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 28%, transparent);
+    background: ${(props) =>
+      props.$active
+        ? 'linear-gradient(145deg, color-mix(in srgb, var(--color-primary) 30%, transparent), color-mix(in srgb, var(--color-primary) 10%, transparent))'
+        : 'transparent'};
+    box-shadow: ${(props) =>
+      props.$active
+        ? '0 0 0 1px color-mix(in srgb, var(--color-primary) 75%, transparent), 0 8px 20px color-mix(in srgb, var(--color-primary) 26%, transparent), inset 0 -2px 0 color-mix(in srgb, var(--color-primary) 100%, transparent)'
+        : '0 0 0 1px color-mix(in srgb, var(--color-primary) 28%, transparent)'};
+  }
+
+  &:focus-visible {
+    outline: none;
+    border-color: color-mix(in srgb, var(--color-primary) 70%, transparent);
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--color-background) 84%, transparent),
+      0 0 0 3px color-mix(in srgb, var(--color-primary) 62%, transparent);
   }
 `
 
-const ConversationTabText = styled.span`
+const ConversationTabText = styled.span<{ $active: boolean }>`
   display: flex;
   flex: 1;
   min-width: 0;
@@ -663,24 +819,29 @@ const ConversationTabText = styled.span`
   gap: 2px;
 `
 
-const ConversationTabTitle = styled.span`
+const ConversationTabTitle = styled.span<{ $active: boolean }>`
   display: block;
   width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: ${(props) => (props.$active ? 700 : 600)};
+  color: ${(props) =>
+    props.$active ? 'color-mix(in srgb, var(--color-text) 100%, transparent)' : 'var(--color-text)'};
 `
 
-const ConversationTabMeta = styled.span`
+const ConversationTabMeta = styled.span<{ $active: boolean }>`
   display: block;
   width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 11px;
-  color: color-mix(in srgb, var(--color-text) 72%, transparent);
+  color: ${(props) =>
+    props.$active
+      ? 'color-mix(in srgb, var(--color-primary) 70%, var(--color-text) 30%)'
+      : 'color-mix(in srgb, var(--color-text) 72%, transparent)'};
 `
 
 const ConversationTabClose = styled.button`

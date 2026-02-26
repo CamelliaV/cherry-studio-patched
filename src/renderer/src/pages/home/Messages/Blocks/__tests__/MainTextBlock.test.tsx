@@ -3,7 +3,7 @@ import type { Model } from '@renderer/types'
 import { WEB_SEARCH_SOURCE } from '@renderer/types'
 import type { MainTextMessageBlock } from '@renderer/types/newMessage'
 import { MessageBlockStatus, MessageBlockType } from '@renderer/types/newMessage'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { Provider } from 'react-redux'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -93,6 +93,7 @@ describe('MainTextBlock', () => {
   let mockGetModelUniqId: any
   let mockWithCitationTags: any
   let mockDetermineCitationSource: any
+  let mockOpenExternal: any
 
   // Create a mock store for Provider
   const mockStore = configureStore({
@@ -103,6 +104,12 @@ describe('MainTextBlock', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
+    mockOpenExternal = vi.fn()
+    ;(window as any).api = {
+      shell: {
+        openExternal: mockOpenExternal
+      }
+    }
 
     // Get the mocked functions
     const { getModelUniqId } = await import('@renderer/services/ModelService')
@@ -203,6 +210,33 @@ describe('MainTextBlock', () => {
       const textElement = getRenderedPlainText()!
       expect(textElement.textContent).toBe(complexContent)
       expect(textElement).toHaveClass('markdown')
+    })
+
+    it('should render clickable links in plain text mode', () => {
+      mockUseSettings.mockReturnValue({ renderInputMessageAsMarkdown: false })
+      const block = createMainTextBlock({
+        content: 'Read https://example.com/docs and www.cherry-ai.com now.'
+      })
+
+      renderMainTextBlock({ block, role: 'user' })
+
+      const links = screen.getAllByRole('link')
+      expect(links).toHaveLength(2)
+      expect(links[0]).toHaveAttribute('href', 'https://example.com/docs')
+      expect(links[1]).toHaveAttribute('href', 'https://www.cherry-ai.com')
+    })
+
+    it('should open plain text links via shell when clicked', () => {
+      mockUseSettings.mockReturnValue({ renderInputMessageAsMarkdown: false })
+      const block = createMainTextBlock({
+        content: 'Visit https://example.com/docs.'
+      })
+
+      renderMainTextBlock({ block, role: 'user' })
+
+      const link = screen.getByRole('link', { name: 'https://example.com/docs' })
+      fireEvent.click(link)
+      expect(mockOpenExternal).toHaveBeenCalledWith('https://example.com/docs')
     })
 
     it('should handle empty content gracefully', () => {

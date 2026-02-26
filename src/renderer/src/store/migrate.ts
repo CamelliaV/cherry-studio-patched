@@ -3349,6 +3349,46 @@ const migrateConfig = {
       logger.error('migrate 200 error', error as Error)
       return state
     }
+  },
+  '201': (state: RootState) => {
+    try {
+      if (state.settings.backgroundSlideshowEnabled === undefined) {
+        state.settings.backgroundSlideshowEnabled = settingsInitialState.backgroundSlideshowEnabled
+      }
+      if (state.settings.backgroundSlideshowIntervalSeconds === undefined) {
+        state.settings.backgroundSlideshowIntervalSeconds = settingsInitialState.backgroundSlideshowIntervalSeconds
+      }
+      if (state.settings.backgroundSlideshowDirectories === undefined) {
+        state.settings.backgroundSlideshowDirectories = settingsInitialState.backgroundSlideshowDirectories
+      }
+      logger.info('migrate 201 success')
+      return state
+    } catch (error) {
+      logger.error('migrate 201 error', error as Error)
+      return state
+    }
+  },
+  '202': (state: RootState) => {
+    try {
+      if (state.settings.backgroundSlideshowOpacity === undefined) {
+        state.settings.backgroundSlideshowOpacity = settingsInitialState.backgroundSlideshowOpacity
+      }
+      logger.info('migrate 202 success')
+      return state
+    } catch (error) {
+      logger.error('migrate 202 error', error as Error)
+      return state
+    }
+  },
+  '203': (state: RootState) => {
+    try {
+      addShortcuts(state, ['copy_background_image_uri'], 'open_launcher')
+      logger.info('migrate 203 success')
+      return state
+    } catch (error) {
+      logger.error('migrate 203 error', error as Error)
+      return state
+    }
   }
 }
 

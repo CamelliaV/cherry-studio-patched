@@ -229,6 +229,13 @@
   text-decoration: underline;
 }
 
+.markdown .message-plain-link {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+  font-weight: 500;
+}
+
 .markdown strong {
   font-weight: bold;
 }

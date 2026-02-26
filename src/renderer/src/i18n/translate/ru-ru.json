@@ -635,6 +635,13 @@
         "title": "Настройки MCP"
       },
       "model": "Настройки модели",
+      "model_group": {
+        "count_suffix": "[to be translated]:{{count}} models",
+        "edit": "[to be translated]:Edit Model Groups",
+        "option_label": "[to be translated]:Group: {{name}} ({{count}})",
+        "selected_label": "[to be translated]:Group: {{name}}",
+        "use_single_model": "[to be translated]:Use Single Model"
+      },
       "more": "Настройки ассистента",
       "prompt": "Настройки промптов",
       "reasoning_effort": {
@@ -1388,6 +1395,7 @@
     "subscribe": "Подписаться",
     "success": "Успешно",
     "swap": "Поменять местами",
+    "tokens": "[to be translated]:Tokens",
     "topics": "Топики",
     "translate_text": "Перевести текст",
     "unknown": "Неизвестно",
@@ -4175,6 +4183,22 @@
       "assistant": {
         "title": "Настройки ассистентов"
       },
+      "background": {
+        "actions": "[to be translated]:Actions",
+        "add_directory": "[to be translated]:Add Folder",
+        "current_image_uri": "[to be translated]:Current Image URI",
+        "current_image_uri_empty": "[to be translated]:No active background image",
+        "directories": "[to be translated]:Image Folders",
+        "duplicate_directory": "[to be translated]:Folder already added",
+        "empty_directories": "[to be translated]:No folders selected",
+        "enable": "[to be translated]:Enable Slideshow Background",
+        "interval_seconds": "[to be translated]:Switch Interval",
+        "next_image": "[to be translated]:Next Image",
+        "no_images": "[to be translated]:No images found in selected folders",
+        "opacity": "[to be translated]:Image Opacity",
+        "seconds": "[to be translated]:seconds",
+        "title": "[to be translated]:Background Slideshow"
+      },
       "custom": {
         "css": {
           "cherrycss": "Получить из cherrycss.com",
@@ -4955,6 +4979,7 @@
       "check_all_keys": "Проверить все ключи",
       "check_multiple_keys": "Проверить несколько ключей API",
       "copilot": {
+        "apply_claude_code_compat_headers": "[to be translated]:Apply Claude Code compatibility headers",
         "auth_failed": "Github Copilot认证失败",
         "auth_success": "Github Copilot认证成功",
         "auth_success_title": "Аутентификация успешна",
@@ -4988,7 +5013,8 @@
         "step_copy_code_desc": "Скопировать код авторизации устройства",
         "step_copy_code_detail": "Код авторизации автоматически скопирован, вы также можете скопировать его вручную",
         "step_get_code": "Получить код авторизации",
-        "step_get_code_desc": "Сгенерировать код авторизации устройства"
+        "step_get_code_desc": "Сгенерировать код авторизации устройства",
+        "user_agent_placeholder": "[to be translated]:User-Agent override (optional)"
       },
       "delete": {
         "content": "Вы уверены, что хотите удалить этот провайдер?",
@@ -5115,6 +5141,7 @@
       "actions": "操作",
       "clear_shortcut": "Очистить сочетание клавиш",
       "clear_topic": "Очистить все сообщения",
+      "copy_background_image_uri": "[to be translated]:Reveal Background Image in Folder",
       "copy_last_message": "Копировать последнее сообщение",
       "edit_last_user_message": "Редактировать последнее сообщение пользователя",
       "enabled": "Включить",
@@ -5122,6 +5149,7 @@
       "label": "Клавиша",
       "mini_window": "Быстрый помощник",
       "new_topic": "Новый топик",
+      "open_launcher": "[to be translated]:Open Launcher",
       "press_shortcut": "Нажмите сочетание клавиш",
       "rename_topic": "Переименовать топик",
       "reset_defaults": "Сбросить настройки по умолчанию",
@@ -5140,6 +5168,34 @@
       "zoom_in": "Увеличить",
       "zoom_out": "Уменьшить",
       "zoom_reset": "Сбросить масштаб"
+    },
+    "statistics": {
+      "assistant_meta": "[to be translated]:{{tokens}} tokens · {{topics}} topics · {{conversations}} conversations",
+      "cards": {
+        "assistants": "[to be translated]:Assistants",
+        "completion_tokens": "[to be translated]:Completion Tokens",
+        "conversations": "[to be translated]:Conversations",
+        "messages": "[to be translated]:Messages",
+        "prompt_tokens": "[to be translated]:Prompt Tokens",
+        "topics": "[to be translated]:Topics",
+        "total_tokens": "[to be translated]:Total Tokens"
+      },
+      "columns": {
+        "completion_tokens": "[to be translated]:Completion",
+        "conversation": "[to be translated]:Conversation",
+        "messages": "[to be translated]:Messages",
+        "prompt_tokens": "[to be translated]:Prompt",
+        "total_tokens": "[to be translated]:Total",
+        "updated_at": "[to be translated]:Updated"
+      },
+      "conversation_label": "[to be translated]:Conversation {{index}}",
+      "description": "[to be translated]:Token usage statistics across all assistants, topics and conversations.",
+      "last_updated": "[to be translated]:Updated at {{time}}",
+      "menu": "[to be translated]:Statistics",
+      "no_conversations": "[to be translated]:No conversations",
+      "no_topics": "[to be translated]:No topics",
+      "title": "[to be translated]:Token Statistics",
+      "topic_meta": "[to be translated]:{{tokens}} tokens · {{conversations}} conversations · {{messages}} messages"
     },
     "theme": {
       "color_primary": "Цвет темы",

@@ -34,6 +34,7 @@ import {
   isSupportStreamOptionsProvider,
   isVertexProvider
 } from '@renderer/utils/provider'
+import { CLAUDE_CODE_COMPAT_HEADERS, CLAUDE_CODE_USER_AGENT } from '@shared/anthropic'
 import { defaultAppHeaders } from '@shared/utils'
 import { cloneDeep, isEmpty } from 'lodash'
 
@@ -258,7 +259,8 @@ export function providerToAiSdkConfig(actualProvider: Provider, model: Model): A
   }
 
   const headers: BaseExtraOptions['headers'] = {
-    ...defaultAppHeaders(),
+    ...(actualProvider.claudeCodeCompat ? {} : defaultAppHeaders()),
+    ...(actualProvider.claudeCodeCompat ? CLAUDE_CODE_COMPAT_HEADERS : {}),
     ...actualProvider.extra_headers
   }
   if (aiSdkProviderId === 'openai') {
@@ -275,6 +277,11 @@ export function providerToAiSdkConfig(actualProvider: Provider, model: Model): A
   // TODO: but the PR don't backport to v5, the code will be removed when upgrading to v6
   if (!isSupportDeveloperRoleProvider(actualProvider) || !isOpenAIReasoningModel(model)) {
     _fetch = createDeveloperToSystemFetch(fetch)
+  }
+
+  // Override user-agent AFTER SDK processing (must be outermost wrapper)
+  if (actualProvider.claudeCodeCompat) {
+    _fetch = createClaudeCodeCompatFetch(_fetch)
   }
 
   const baseExtraOptions = {
@@ -446,6 +453,23 @@ function createDeveloperToSystemFetch(originalFetch?: typeof fetch): typeof fetc
       }
     }
     return baseFetch(input, options)
+  }
+}
+
+/**
+ * Creates a fetch wrapper that overrides the user-agent header AFTER the AI SDK
+ * has processed the request (withUserAgentSuffix appends SDK info to user-agent).
+ * Must be composed as the outermost fetch wrapper to run last.
+ */
+function createClaudeCodeCompatFetch(originalFetch?: typeof fetch): typeof fetch {
+  const baseFetch = originalFetch ?? fetch
+  return async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.headers) {
+      const headers = new Headers(init.headers)
+      headers.set('user-agent', CLAUDE_CODE_USER_AGENT)
+      return baseFetch(input, { ...init, headers })
+    }
+    return baseFetch(input, init)
   }
 }
 

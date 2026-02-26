@@ -635,6 +635,13 @@
         "title": "Paramètres MCP"
       },
       "model": "Paramètres du modèle",
+      "model_group": {
+        "count_suffix": "[to be translated]:{{count}} models",
+        "edit": "[to be translated]:Edit Model Groups",
+        "option_label": "[to be translated]:Group: {{name}} ({{count}})",
+        "selected_label": "[to be translated]:Group: {{name}}",
+        "use_single_model": "[to be translated]:Use Single Model"
+      },
       "more": "Paramètres de l'assistant",
       "prompt": "Paramètres de l'invite",
       "reasoning_effort": {
@@ -1388,6 +1395,7 @@
     "subscribe": "S'abonner",
     "success": "Succès",
     "swap": "Échanger",
+    "tokens": "[to be translated]:Tokens",
     "topics": "Sujets",
     "translate_text": "Traduire le texte",
     "unknown": "Inconnu",
@@ -4175,6 +4183,22 @@
       "assistant": {
         "title": "Paramètres de l'assistant"
       },
+      "background": {
+        "actions": "[to be translated]:Actions",
+        "add_directory": "[to be translated]:Add Folder",
+        "current_image_uri": "[to be translated]:Current Image URI",
+        "current_image_uri_empty": "[to be translated]:No active background image",
+        "directories": "[to be translated]:Image Folders",
+        "duplicate_directory": "[to be translated]:Folder already added",
+        "empty_directories": "[to be translated]:No folders selected",
+        "enable": "[to be translated]:Enable Slideshow Background",
+        "interval_seconds": "[to be translated]:Switch Interval",
+        "next_image": "[to be translated]:Next Image",
+        "no_images": "[to be translated]:No images found in selected folders",
+        "opacity": "[to be translated]:Image Opacity",
+        "seconds": "[to be translated]:seconds",
+        "title": "[to be translated]:Background Slideshow"
+      },
       "custom": {
         "css": {
           "cherrycss": "Obtenir depuis cherrycss.com",
@@ -4955,6 +4979,7 @@
       "check_all_keys": "Vérifier toutes les clés",
       "check_multiple_keys": "Vérifier plusieurs clés API",
       "copilot": {
+        "apply_claude_code_compat_headers": "[to be translated]:Apply Claude Code compatibility headers",
         "auth_failed": "Échec de l'authentification Github Copilot",
         "auth_success": "Authentification Github Copilot réussie",
         "auth_success_title": "Authentification réussie",
@@ -4988,7 +5013,8 @@
         "step_copy_code_desc": "Copier le code d'autorisation de l'appareil",
         "step_copy_code_detail": "Le code d'autorisation a été automatiquement copié, vous pouvez aussi le copier manuellement",
         "step_get_code": "Obtenir le code d'autorisation",
-        "step_get_code_desc": "Générer le code d'autorisation de l'appareil"
+        "step_get_code_desc": "Générer le code d'autorisation de l'appareil",
+        "user_agent_placeholder": "[to be translated]:User-Agent override (optional)"
       },
       "delete": {
         "content": "Êtes-vous sûr de vouloir supprimer ce fournisseur de modèles ?",
@@ -5115,6 +5141,7 @@
       "actions": "操作",
       "clear_shortcut": "Effacer raccourci clavier",
       "clear_topic": "Vider les messages",
+      "copy_background_image_uri": "[to be translated]:Reveal Background Image in Folder",
       "copy_last_message": "Copier le dernier message",
       "edit_last_user_message": "Éditer le dernier message utilisateur",
       "enabled": "activer",
@@ -5122,6 +5149,7 @@
       "label": "Touche",
       "mini_window": "Assistant rapide",
       "new_topic": "Nouveau sujet",
+      "open_launcher": "[to be translated]:Open Launcher",
       "press_shortcut": "Appuyer sur raccourci clavier",
       "rename_topic": "Renommer le sujet",
       "reset_defaults": "Réinitialiser raccourcis par défaut",
@@ -5140,6 +5168,34 @@
       "zoom_in": "Agrandir l'interface",
       "zoom_out": "Réduire l'interface",
       "zoom_reset": "Réinitialiser le zoom"
+    },
+    "statistics": {
+      "assistant_meta": "[to be translated]:{{tokens}} tokens · {{topics}} topics · {{conversations}} conversations",
+      "cards": {
+        "assistants": "[to be translated]:Assistants",
+        "completion_tokens": "[to be translated]:Completion Tokens",
+        "conversations": "[to be translated]:Conversations",
+        "messages": "[to be translated]:Messages",
+        "prompt_tokens": "[to be translated]:Prompt Tokens",
+        "topics": "[to be translated]:Topics",
+        "total_tokens": "[to be translated]:Total Tokens"
+      },
+      "columns": {
+        "completion_tokens": "[to be translated]:Completion",
+        "conversation": "[to be translated]:Conversation",
+        "messages": "[to be translated]:Messages",
+        "prompt_tokens": "[to be translated]:Prompt",
+        "total_tokens": "[to be translated]:Total",
+        "updated_at": "[to be translated]:Updated"
+      },
+      "conversation_label": "[to be translated]:Conversation {{index}}",
+      "description": "[to be translated]:Token usage statistics across all assistants, topics and conversations.",
+      "last_updated": "[to be translated]:Updated at {{time}}",
+      "menu": "[to be translated]:Statistics",
+      "no_conversations": "[to be translated]:No conversations",
+      "no_topics": "[to be translated]:No topics",
+      "title": "[to be translated]:Token Statistics",
+      "topic_meta": "[to be translated]:{{tokens}} tokens · {{conversations}} conversations · {{messages}} messages"
     },
     "theme": {
       "color_primary": "Couleur principale",

@@ -3,7 +3,8 @@ import { TopView } from '@renderer/components/TopView'
 import { useCopilot } from '@renderer/hooks/useCopilot'
 import { useProvider } from '@renderer/hooks/useProvider'
 import type { Provider } from '@renderer/types'
-import { Modal, Space } from 'antd'
+import { CLAUDE_CODE_COMPAT_HEADERS } from '@shared/anthropic'
+import { Button, Input, Modal, Space } from 'antd'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -15,6 +16,14 @@ interface ShowParams {
 
 interface Props extends ShowParams {
   resolve: (data: any) => void
+}
+
+const parseHeaderText = (headerText: string) => {
+  const parsed = headerText.trim() ? JSON.parse(headerText) : {}
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Invalid headers object')
+  }
+  return parsed as Record<string, string>
 }
 
 const PopupContainer: React.FC<Props> = ({ provider, resolve }) => {
@@ -29,10 +38,32 @@ const PopupContainer: React.FC<Props> = ({ provider, resolve }) => {
       : JSON.stringify(provider.extra_headers || {}, null, 2)
 
   const [headerText, setHeaderText] = useState<string>(headers)
+  const [userAgentOverride, setUserAgentOverride] = useState<string>(() => {
+    try {
+      const parsedHeaders = parseHeaderText(headers)
+      return parsedHeaders['user-agent'] || parsedHeaders['User-Agent'] || ''
+    } catch {
+      return ''
+    }
+  })
+
+  const normalizeHeaders = useCallback(
+    (headers: Record<string, string>) => {
+      const normalizedHeaders = { ...headers }
+      delete normalizedHeaders['User-Agent']
+      if (userAgentOverride.trim()) {
+        normalizedHeaders['user-agent'] = userAgentOverride.trim()
+      } else {
+        delete normalizedHeaders['user-agent']
+      }
+      return normalizedHeaders
+    },
+    [userAgentOverride]
+  )
 
   const onUpdateHeaders = useCallback(() => {
     try {
-      const headers = headerText.trim() ? JSON.parse(headerText) : {}
+      const headers = normalizeHeaders(parseHeaderText(headerText))
 
       if (provider.id === 'copilot') {
         updateDefaultHeaders(headers)
@@ -44,7 +75,20 @@ const PopupContainer: React.FC<Props> = ({ provider, resolve }) => {
     } catch (error) {
       window.toast.error(t('settings.provider.copilot.invalid_json'))
     }
-  }, [headerText, provider, t, updateDefaultHeaders, updateProvider])
+  }, [headerText, normalizeHeaders, provider, t, updateDefaultHeaders, updateProvider])
+
+  const onApplyClaudeCodeCompatHeaders = useCallback(() => {
+    try {
+      const mergedHeaders = {
+        ...parseHeaderText(headerText),
+        ...CLAUDE_CODE_COMPAT_HEADERS
+      }
+      setHeaderText(JSON.stringify(mergedHeaders, null, 2))
+      setUserAgentOverride(CLAUDE_CODE_COMPAT_HEADERS['user-agent'])
+    } catch {
+      window.toast.error(t('settings.provider.copilot.invalid_json'))
+    }
+  }, [headerText, t])
 
   const onOk = () => {
     onUpdateHeaders()
@@ -73,6 +117,17 @@ const PopupContainer: React.FC<Props> = ({ provider, resolve }) => {
       centered>
       <Space.Compact direction="vertical" style={{ width: '100%', marginTop: 5 }}>
         <SettingHelpText>{t('settings.provider.copilot.headers_description')}</SettingHelpText>
+        <Input
+          value={userAgentOverride}
+          onChange={(e) => setUserAgentOverride(e.target.value)}
+          placeholder={t('settings.provider.copilot.user_agent_placeholder')}
+          allowClear
+        />
+        <Space>
+          <Button onClick={onApplyClaudeCodeCompatHeaders}>
+            {t('settings.provider.copilot.apply_claude_code_compat_headers')}
+          </Button>
+        </Space>
         <CodeEditor
           value={headerText}
           language="json"

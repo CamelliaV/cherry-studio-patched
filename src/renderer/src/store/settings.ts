@@ -144,6 +144,10 @@ export interface SettingsState {
   showTranslateConfirm: boolean
   enableTopicNaming: boolean
   customCss: string
+  backgroundSlideshowEnabled: boolean
+  backgroundSlideshowIntervalSeconds: number
+  backgroundSlideshowDirectories: string[]
+  backgroundSlideshowOpacity: number
   topicNamingPrompt: string
   // 消息操作确认设置
   confirmDeleteMessage: boolean
@@ -337,6 +341,10 @@ export const initialState: SettingsState = {
   showTranslateConfirm: true,
   enableTopicNaming: true,
   customCss: '',
+  backgroundSlideshowEnabled: false,
+  backgroundSlideshowIntervalSeconds: 60,
+  backgroundSlideshowDirectories: [],
+  backgroundSlideshowOpacity: 1,
   topicNamingPrompt: '',
   sidebarIcons: {
     visible: DEFAULT_SIDEBAR_ICONS,
@@ -517,6 +525,18 @@ const settingsSlice = createSlice({
     },
     setCustomCss: (state, action: PayloadAction<string>) => {
       state.customCss = action.payload
+    },
+    setBackgroundSlideshowEnabled: (state, action: PayloadAction<boolean>) => {
+      state.backgroundSlideshowEnabled = action.payload
+    },
+    setBackgroundSlideshowIntervalSeconds: (state, action: PayloadAction<number>) => {
+      state.backgroundSlideshowIntervalSeconds = action.payload
+    },
+    setBackgroundSlideshowDirectories: (state, action: PayloadAction<string[]>) => {
+      state.backgroundSlideshowDirectories = action.payload
+    },
+    setBackgroundSlideshowOpacity: (state, action: PayloadAction<number>) => {
+      state.backgroundSlideshowOpacity = action.payload
     },
     setUserTheme: (state, action: PayloadAction<UserTheme>) => {
       state.userTheme = action.payload
@@ -963,6 +983,10 @@ export const {
   setEnableTopicNaming,
   setPasteLongTextThreshold,
   setCustomCss,
+  setBackgroundSlideshowEnabled,
+  setBackgroundSlideshowIntervalSeconds,
+  setBackgroundSlideshowDirectories,
+  setBackgroundSlideshowOpacity,
   setTopicNamingPrompt,
   setSidebarIcons,
   setNarrowMode,

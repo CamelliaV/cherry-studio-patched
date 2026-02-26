@@ -4183,6 +4183,22 @@
       "assistant": {
         "title": "助手設定"
       },
+      "background": {
+        "actions": "操作",
+        "add_directory": "新增資料夾",
+        "current_image_uri": "目前圖片 URI",
+        "current_image_uri_empty": "目前沒有背景圖片",
+        "directories": "圖片資料夾",
+        "duplicate_directory": "此資料夾已新增",
+        "empty_directories": "尚未選擇資料夾",
+        "enable": "啟用背景輪播",
+        "interval_seconds": "切換間隔",
+        "next_image": "下一張",
+        "no_images": "所選資料夾中找不到圖片",
+        "opacity": "圖片透明度",
+        "seconds": "秒",
+        "title": "背景輪播"
+      },
       "custom": {
         "css": {
           "cherrycss": "從 cherrycss.com 取得",
@@ -4962,7 +4978,11 @@
       "check": "檢查",
       "check_all_keys": "檢查所有金鑰",
       "check_multiple_keys": "檢查多個 API 金鑰",
+      "claude_code_compat": {
+        "tooltip": "將請求偽裝為 Claude Code 用戶端（用於僅允許 Claude Code 用戶端的代理）"
+      },
       "copilot": {
+        "apply_claude_code_compat_headers": "套用 Claude Code 相容請求標頭",
         "auth_failed": "GitHub Copilot 認證失敗",
         "auth_success": "GitHub Copilot 認證成功",
         "auth_success_title": "認證成功",
@@ -4996,7 +5016,8 @@
         "step_copy_code_desc": "複製裝置授權碼",
         "step_copy_code_detail": "授權碼已自動複製，您也可以手動複製",
         "step_get_code": "取得授權碼",
-        "step_get_code_desc": "產生裝置授權碼"
+        "step_get_code_desc": "產生裝置授權碼",
+        "user_agent_placeholder": "User-Agent 覆寫值（可選）"
       },
       "delete": {
         "content": "確定要刪除此提供者嗎？",
@@ -5123,6 +5144,7 @@
       "actions": "操作",
       "clear_shortcut": "清除快捷鍵",
       "clear_topic": "清除所有訊息",
+      "copy_background_image_uri": "在資料夾中顯示背景圖片",
       "copy_last_message": "複製上一則訊息",
       "edit_last_user_message": "編輯最後一則使用者訊息",
       "enabled": "啟用",

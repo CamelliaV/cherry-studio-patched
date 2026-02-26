@@ -5,6 +5,7 @@ import { useTheme } from '@renderer/context/ThemeProvider'
 import db from '@renderer/databases'
 import i18n, { setDayjsLocale } from '@renderer/i18n'
 import KnowledgeQueue from '@renderer/queue/KnowledgeQueue'
+import { backgroundSlideshowService } from '@renderer/services/BackgroundSlideshowService'
 import MemoryService from '@renderer/services/MemoryService'
 import { handleSaveData, useAppDispatch, useAppSelector } from '@renderer/store'
 import { selectMemoryConfig } from '@renderer/store/memory'
@@ -41,7 +42,11 @@ export function useAppInit() {
     autoCheckUpdate,
     proxyMode,
     customCss,
-    enableDataCollection
+    enableDataCollection,
+    backgroundSlideshowEnabled,
+    backgroundSlideshowIntervalSeconds,
+    backgroundSlideshowDirectories,
+    backgroundSlideshowOpacity
   } = useSettings()
   const { isLeftNavbar } = useNavbarPosition()
   const { minappShow } = useRuntime()
@@ -171,6 +176,20 @@ export function useAppInit() {
       document.head.appendChild(customCssElement)
     }
   }, [customCss])
+
+  useEffect(() => {
+    void backgroundSlideshowService.configure({
+      enabled: backgroundSlideshowEnabled,
+      intervalSeconds: backgroundSlideshowIntervalSeconds,
+      directories: backgroundSlideshowDirectories,
+      opacity: backgroundSlideshowOpacity
+    })
+  }, [
+    backgroundSlideshowDirectories,
+    backgroundSlideshowEnabled,
+    backgroundSlideshowIntervalSeconds,
+    backgroundSlideshowOpacity
+  ])
 
   useEffect(() => {
     if (!window.electron?.ipcRenderer) return

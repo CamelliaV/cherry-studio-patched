@@ -4183,6 +4183,22 @@
       "assistant": {
         "title": "助手设置"
       },
+      "background": {
+        "actions": "操作",
+        "add_directory": "添加文件夹",
+        "current_image_uri": "当前图片 URI",
+        "current_image_uri_empty": "当前没有背景图片",
+        "directories": "图片文件夹",
+        "duplicate_directory": "该文件夹已添加",
+        "empty_directories": "尚未选择文件夹",
+        "enable": "启用背景轮播",
+        "interval_seconds": "切换间隔",
+        "next_image": "下一张",
+        "no_images": "所选文件夹中未找到图片",
+        "opacity": "图片透明度",
+        "seconds": "秒",
+        "title": "背景轮播"
+      },
       "custom": {
         "css": {
           "cherrycss": "从 cherrycss.com 获取",
@@ -4962,7 +4978,11 @@
       "check": "检测",
       "check_all_keys": "检测所有密钥",
       "check_multiple_keys": "检测多个 API 密钥",
+      "claude_code_compat": {
+        "tooltip": "将请求伪装为 Claude Code 客户端（用于仅允许 Claude Code 客户端的代理）"
+      },
       "copilot": {
+        "apply_claude_code_compat_headers": "应用 Claude Code 兼容请求头",
         "auth_failed": "Github Copilot 认证失败",
         "auth_success": "Github Copilot 认证成功",
         "auth_success_title": "认证成功",
@@ -4996,7 +5016,8 @@
         "step_copy_code_desc": "复制设备授权码",
         "step_copy_code_detail": "授权码已自动复制，您也可以手动复制",
         "step_get_code": "获取授权码",
-        "step_get_code_desc": "生成设备授权码"
+        "step_get_code_desc": "生成设备授权码",
+        "user_agent_placeholder": "User-Agent 覆盖值（可选）"
       },
       "delete": {
         "content": "确定要删除此模型提供商吗？",
@@ -5123,6 +5144,7 @@
       "actions": "操作",
       "clear_shortcut": "清除快捷键",
       "clear_topic": "清空消息",
+      "copy_background_image_uri": "在文件夹中显示背景图片",
       "copy_last_message": "复制上一条消息",
       "edit_last_user_message": "编辑最后一条用户消息",
       "enabled": "启用",

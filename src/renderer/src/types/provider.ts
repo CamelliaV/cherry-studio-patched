@@ -134,6 +134,9 @@ export type Provider = {
   notes?: string
   extra_headers?: Record<string, string>
 
+  // Claude Code client compatibility mode
+  claudeCodeCompat?: boolean
+
   // Anthropic prompt caching settings
   anthropicCacheControl?: AnthropicCacheControlSettings
 }

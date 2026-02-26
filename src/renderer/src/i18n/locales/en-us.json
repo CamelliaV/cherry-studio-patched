@@ -4183,6 +4183,22 @@
       "assistant": {
         "title": "Assistant Settings"
       },
+      "background": {
+        "actions": "Actions",
+        "add_directory": "Add Folder",
+        "current_image_uri": "Current Image URI",
+        "current_image_uri_empty": "No active background image",
+        "directories": "Image Folders",
+        "duplicate_directory": "Folder already added",
+        "empty_directories": "No folders selected",
+        "enable": "Enable Slideshow Background",
+        "interval_seconds": "Switch Interval",
+        "next_image": "Next Image",
+        "no_images": "No images found in selected folders",
+        "opacity": "Image Opacity",
+        "seconds": "seconds",
+        "title": "Background Slideshow"
+      },
       "custom": {
         "css": {
           "cherrycss": "Get from cherrycss.com",
@@ -4962,7 +4978,11 @@
       "check": "Check",
       "check_all_keys": "Check All Keys",
       "check_multiple_keys": "Check Multiple API Keys",
+      "claude_code_compat": {
+        "tooltip": "Disguise requests as Claude Code client (for proxies that only allow Claude Code clients)"
+      },
       "copilot": {
+        "apply_claude_code_compat_headers": "Apply Claude Code compatibility headers",
         "auth_failed": "Github Copilot authentication failed.",
         "auth_success": "GitHub Copilot authentication successful.",
         "auth_success_title": "Certification successful.",
@@ -4996,7 +5016,8 @@
         "step_copy_code_desc": "Copy device authorization code",
         "step_copy_code_detail": "Authorization code has been automatically copied, you can also copy it manually",
         "step_get_code": "Get Authorization Code",
-        "step_get_code_desc": "Generate device authorization code"
+        "step_get_code_desc": "Generate device authorization code",
+        "user_agent_placeholder": "User-Agent override (optional)"
       },
       "delete": {
         "content": "Are you sure you want to delete this provider?",
@@ -5123,6 +5144,7 @@
       "actions": "operation",
       "clear_shortcut": "Clear Shortcut",
       "clear_topic": "Clear Messages",
+      "copy_background_image_uri": "Reveal Background Image in Folder",
       "copy_last_message": "Copy Last Message",
       "edit_last_user_message": "Edit Last User Message",
       "enabled": "Enable",

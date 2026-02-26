@@ -94,6 +94,25 @@ This README reflects only the new functionality added in this patch series.
 - Clicking it opens assistant settings directly on the model tab.
 - Model-group labels/counts in navbar selector are now fully localized.
 
+16. Background slideshow for chat content
+- Added a configurable background slideshow for the chat content area.
+- Settings are available in `Settings -> Display -> Background Slideshow`.
+- Supports multiple image folders, switch interval, opacity, and manual `Next Image`.
+- Added shortcut `Ctrl/Cmd+Shift+U` to reveal the current background image in folder.
+
+17. Claude Code compatibility mode for Anthropic providers
+- Added a provider-level `Claude Code compatibility` toggle.
+- When enabled, requests use Claude Code-compatible headers and user-agent behavior.
+- Custom Header popup now supports quick applying Claude Code compatibility headers.
+
+18. Launcher assistant-click behavior fix
+- In launcher popup (`Ctrl/Cmd+P`), clicking an assistant now creates a new topic and keeps focus on that new topic tab.
+- Fixed the regression where UI could jump to the new topic and then snap back to the previously active tab.
+
+19. Plain text link detection in user messages
+- When input-markdown rendering is disabled, plain URLs in user messages are now rendered as clickable links.
+- Includes safe external open behavior and tests for parsing/click handling.
+
 ## Arch Linux Quick Install
 
 ```bash

@@ -22,6 +22,7 @@ interface Props {
   activeTopic: Topic
   setActiveAssistant: (assistant: Assistant) => void
   setActiveTopic: (topic: Topic) => void
+  activateConversation?: (assistant: Assistant, topic: Topic) => void
   position: 'left' | 'right'
   forceToSeeAllTab?: boolean
   style?: React.CSSProperties
@@ -34,6 +35,7 @@ const HomeTabs: FC<Props> = ({
   activeTopic,
   setActiveAssistant,
   setActiveTopic,
+  activateConversation,
   position,
   forceToSeeAllTab,
   style
@@ -78,12 +80,17 @@ const HomeTabs: FC<Props> = ({
 
   const onLauncherSelect = useCallback(
     (assistant: Assistant, topic: Topic) => {
+      if (activateConversation) {
+        activateConversation(assistant, topic)
+        return
+      }
+
       setActiveAssistant(assistant)
       setActiveTopic(topic)
       dispatch(setActiveAgentId(null))
       dispatch(setActiveTopicOrSessionAction('topic'))
     },
-    [dispatch, setActiveAssistant, setActiveTopic]
+    [activateConversation, dispatch, setActiveAssistant, setActiveTopic]
   )
 
   useEffect(() => {
