@@ -54,6 +54,7 @@ vi.mock('electron', () => {
 
   class MockBrowserWindow {
     private destroyed = false
+    private browserViews: any[] = []
     public webContents = createWebContents()
     public isDestroyed = vi.fn(() => this.destroyed)
     public close = vi.fn(() => {
@@ -64,8 +65,15 @@ vi.mock('electron', () => {
     })
     public on = vi.fn()
     public setBrowserView = vi.fn()
-    public addBrowserView = vi.fn()
-    public removeBrowserView = vi.fn()
+    public addBrowserView = vi.fn((view: any) => {
+      if (!this.browserViews.includes(view)) {
+        this.browserViews.push(view)
+      }
+    })
+    public removeBrowserView = vi.fn((view: any) => {
+      this.browserViews = this.browserViews.filter((item) => item !== view)
+    })
+    public getBrowserViews = vi.fn(() => this.browserViews)
     public getContentSize = vi.fn(() => [1200, 800])
     public show = vi.fn()
 
@@ -269,6 +277,20 @@ describe('CdpBrowserController', () => {
 
       await controller.switchTab(false, result1.tabId)
       await controller.switchTab(false, result2.tabId)
+    })
+
+    it('keeps tab views attached when switching tabs', async () => {
+      const controller = new CdpBrowserController()
+      const result1 = await controller.open('https://site1.com/', 5000, false, true)
+      const result2 = await controller.open('https://site2.com/', 5000, false, true)
+
+      await controller.switchTab(false, result1.tabId)
+      await controller.switchTab(false, result2.tabId)
+
+      const windows = await import('electron')
+      const mockWindows = (windows as any).__mockWindows as Array<{ removeBrowserView: ReturnType<typeof vi.fn> }>
+
+      expect(mockWindows[0].removeBrowserView).not.toHaveBeenCalled()
     })
 
     it('throws error when switching to non-existent tab', async () => {

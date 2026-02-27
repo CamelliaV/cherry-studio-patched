@@ -13,6 +13,7 @@ This file provides guidance to AI coding assistants when working with code in th
 - **Always propose before executing**: Before making any changes, clearly explain your planned approach and wait for explicit user approval to ensure alignment and prevent unwanted modifications.
 - **Lint, test, and format before completion**: Coding tasks are only complete after running `pnpm lint`, `pnpm test`, and `pnpm format` successfully.
 - **Write conventional commits**: Commit small, focused changes using Conventional Commit messages (e.g., `feat:`, `fix:`, `refactor:`, `docs:`).
+- **README parity before commit/push**: Before attempting to commit or push, update both English and Chinese README files (`README.md` and `docs/zh/README.md`) and keep their content synchronized.
 
 ## Pull Request Workflow (CRITICAL)
 

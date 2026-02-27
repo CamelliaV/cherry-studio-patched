@@ -417,6 +417,14 @@ export class CdpBrowserController {
     return windowInfo
   }
 
+  private ensureTabViewAttached(windowInfo: WindowInfo, view: BrowserView) {
+    if (windowInfo.window.isDestroyed()) return
+    const attachedViews = windowInfo.window.getBrowserViews()
+    if (!attachedViews.includes(view)) {
+      windowInfo.window.addBrowserView(view)
+    }
+  }
+
   private updateViewBounds(windowInfo: WindowInfo) {
     if (windowInfo.window.isDestroyed()) return
 
@@ -427,15 +435,26 @@ export class CdpBrowserController {
       windowInfo.tabBarView.setBounds({ x: 0, y: 0, width, height: TAB_BAR_HEIGHT })
     }
 
-    // Update active tab view bounds
-    if (windowInfo.activeTabId) {
-      const activeTab = windowInfo.tabs.get(windowInfo.activeTabId)
-      if (activeTab && !activeTab.view.webContents.isDestroyed()) {
-        activeTab.view.setBounds({
+    // Keep all tab views attached. Inactive tabs stay full-size but offscreen
+    // to avoid layout collapse/reflow (which can disturb scroll/read position).
+    const contentHeight = Math.max(0, height - TAB_BAR_HEIGHT)
+    const hiddenX = width + 16
+    for (const [tabId, tab] of windowInfo.tabs) {
+      if (tab.view.webContents.isDestroyed()) continue
+      this.ensureTabViewAttached(windowInfo, tab.view)
+      if (tabId === windowInfo.activeTabId) {
+        tab.view.setBounds({
           x: 0,
           y: TAB_BAR_HEIGHT,
           width,
-          height: Math.max(0, height - TAB_BAR_HEIGHT)
+          height: contentHeight
+        })
+      } else {
+        tab.view.setBounds({
+          x: hiddenX,
+          y: TAB_BAR_HEIGHT,
+          width,
+          height: contentHeight
         })
       }
     }
@@ -475,11 +494,7 @@ export class CdpBrowserController {
       if (windowInfo.activeTabId === tabId) {
         windowInfo.activeTabId = windowInfo.tabs.keys().next().value ?? null
         if (windowInfo.activeTabId) {
-          const newActiveTab = windowInfo.tabs.get(windowInfo.activeTabId)
-          if (newActiveTab && !windowInfo.window.isDestroyed()) {
-            windowInfo.window.addBrowserView(newActiveTab.view)
-            this.updateViewBounds(windowInfo)
-          }
+          this.updateViewBounds(windowInfo)
         }
       }
       this.sendTabBarUpdate(windowInfo)
@@ -528,10 +543,12 @@ export class CdpBrowserController {
 
     windowInfo.tabs.set(tabId, tabInfo)
 
-    // Set as active tab and add to window
+    // Set active tab when opening the first tab.
     if (!windowInfo.activeTabId || windowInfo.tabs.size === 1) {
       windowInfo.activeTabId = tabId
-      windowInfo.window.addBrowserView(view)
+    }
+
+    if (!windowInfo.window.isDestroyed()) {
       this.updateViewBounds(windowInfo)
     }
 
@@ -733,11 +750,7 @@ export class CdpBrowserController {
         if (windowInfo.activeTabId === tabId) {
           windowInfo.activeTabId = windowInfo.tabs.keys().next().value ?? null
           if (windowInfo.activeTabId) {
-            const newActiveTab = windowInfo.tabs.get(windowInfo.activeTabId)
-            if (newActiveTab && !windowInfo.window.isDestroyed()) {
-              windowInfo.window.addBrowserView(newActiveTab.view)
-              this.updateViewBounds(windowInfo)
-            }
+            this.updateViewBounds(windowInfo)
           }
         }
         this.sendTabBarUpdate(windowInfo)
@@ -886,19 +899,10 @@ export class CdpBrowserController {
     const tab = windowInfo.tabs.get(tabId)
     if (!tab) throw new Error(`Tab ${tabId} not found`)
 
-    // Remove previous active tab view (but NOT the tabBarView)
-    if (windowInfo.activeTabId && windowInfo.activeTabId !== tabId) {
-      const prevTab = windowInfo.tabs.get(windowInfo.activeTabId)
-      if (prevTab && !windowInfo.window.isDestroyed()) {
-        windowInfo.window.removeBrowserView(prevTab.view)
-      }
-    }
-
     windowInfo.activeTabId = tabId
 
-    // Add the new active tab view
+    // Keep tab views attached; switching only updates bounds to prevent reloads.
     if (!windowInfo.window.isDestroyed()) {
-      windowInfo.window.addBrowserView(tab.view)
       this.updateViewBounds(windowInfo)
     }
 

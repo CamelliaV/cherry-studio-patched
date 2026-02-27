@@ -9,6 +9,8 @@ import styled from 'styled-components'
 interface MessageLineProps {
   messages: Message[]
   persistKey?: string
+  containerId?: string
+  isActive?: boolean
 }
 
 interface TimelineAnchor {
@@ -61,7 +63,12 @@ const getMessagePreview = (message: Message | undefined, maxLength: number) => {
   return truncatePreview(content, maxLength)
 }
 
-const MessageAnchorLine: FC<MessageLineProps> = ({ messages, persistKey }) => {
+const MessageAnchorLine: FC<MessageLineProps> = ({
+  messages,
+  persistKey,
+  containerId = 'messages',
+  isActive = true
+}) => {
   const { t } = useTranslation()
   const [activeAnchorId, setActiveAnchorId] = useState<string>()
   const [hoveredAnchorId, setHoveredAnchorId] = useState<string>()
@@ -104,7 +111,7 @@ const MessageAnchorLine: FC<MessageLineProps> = ({ messages, persistKey }) => {
   }, [messages])
 
   const getNearestAnchorIndex = useCallback(() => {
-    const messagesContainer = document.getElementById('messages')
+    const messagesContainer = document.getElementById(containerId)
     if (!messagesContainer || timelineAnchors.length === 0) {
       return -1
     }
@@ -129,7 +136,7 @@ const MessageAnchorLine: FC<MessageLineProps> = ({ messages, persistKey }) => {
     }
 
     return nearestAnchorIndex
-  }, [timelineAnchors])
+  }, [containerId, timelineAnchors])
 
   const persistTimelineIndex = useCallback(
     (index: number) => {
@@ -212,9 +219,9 @@ const MessageAnchorLine: FC<MessageLineProps> = ({ messages, persistKey }) => {
     },
     {
       enableOnFormTags: true,
-      enabled: timelineAnchors.length > 0
+      enabled: isActive && timelineAnchors.length > 0
     },
-    [jumpTimelineAnchor, timelineAnchors.length]
+    [isActive, jumpTimelineAnchor, timelineAnchors.length]
   )
 
   useHotkeys(
@@ -225,9 +232,9 @@ const MessageAnchorLine: FC<MessageLineProps> = ({ messages, persistKey }) => {
     },
     {
       enableOnFormTags: true,
-      enabled: timelineAnchors.length > 0
+      enabled: isActive && timelineAnchors.length > 0
     },
-    [jumpTimelineAnchor, timelineAnchors.length]
+    [isActive, jumpTimelineAnchor, timelineAnchors.length]
   )
 
   useHotkeys(
@@ -238,9 +245,9 @@ const MessageAnchorLine: FC<MessageLineProps> = ({ messages, persistKey }) => {
     },
     {
       enableOnFormTags: true,
-      enabled: timelineAnchors.length > 0
+      enabled: isActive && timelineAnchors.length > 0
     },
-    [jumpToTimelineEdge, timelineAnchors.length]
+    [isActive, jumpToTimelineEdge, timelineAnchors.length]
   )
 
   useHotkeys(
@@ -251,9 +258,9 @@ const MessageAnchorLine: FC<MessageLineProps> = ({ messages, persistKey }) => {
     },
     {
       enableOnFormTags: true,
-      enabled: timelineAnchors.length > 0
+      enabled: isActive && timelineAnchors.length > 0
     },
-    [jumpToTimelineEdge, timelineAnchors.length]
+    [isActive, jumpToTimelineEdge, timelineAnchors.length]
   )
 
   const scheduleActiveAnchorUpdate = useCallback(() => {
@@ -270,7 +277,7 @@ const MessageAnchorLine: FC<MessageLineProps> = ({ messages, persistKey }) => {
 
   const restorePersistedAnchor = useCallback(
     (attempt = 0) => {
-      if (!storageKey || hasRestoredRef.current || timelineAnchors.length === 0) {
+      if (!isActive || !storageKey || hasRestoredRef.current || timelineAnchors.length === 0) {
         return
       }
 
@@ -304,10 +311,14 @@ const MessageAnchorLine: FC<MessageLineProps> = ({ messages, persistKey }) => {
       setActiveAnchorId(targetAnchor.id)
       scrollIntoView(messageElement, { behavior: 'auto', block: 'start', container: 'nearest' })
     },
-    [storageKey, timelineAnchors]
+    [isActive, storageKey, timelineAnchors]
   )
 
   useEffect(() => {
+    if (!isActive) {
+      return
+    }
+
     restorePersistedAnchor()
 
     return () => {
@@ -316,11 +327,17 @@ const MessageAnchorLine: FC<MessageLineProps> = ({ messages, persistKey }) => {
         restoreTimerRef.current = null
       }
     }
-  }, [restorePersistedAnchor])
+  }, [isActive, restorePersistedAnchor])
 
   useEffect(() => {
-    const messagesContainer = document.getElementById('messages')
-    if (!messagesContainer) return
+    if (!isActive) {
+      return
+    }
+
+    const messagesContainer = document.getElementById(containerId)
+    if (!messagesContainer) {
+      return
+    }
 
     scheduleActiveAnchorUpdate()
     messagesContainer.addEventListener('scroll', scheduleActiveAnchorUpdate, { passive: true })
@@ -334,7 +351,7 @@ const MessageAnchorLine: FC<MessageLineProps> = ({ messages, persistKey }) => {
         updateRafIdRef.current = null
       }
     }
-  }, [scheduleActiveAnchorUpdate])
+  }, [containerId, isActive, scheduleActiveAnchorUpdate])
 
   const scrollToAnchor = useCallback((anchor: TimelineAnchor) => {
     const messageElement = document.getElementById(`message-${anchor.id}`)

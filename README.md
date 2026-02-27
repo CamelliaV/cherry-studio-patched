@@ -113,6 +113,11 @@ This README reflects only the new functionality added in this patch series.
 - When input-markdown rendering is disabled, plain URLs in user messages are now rendered as clickable links.
 - Includes safe external open behavior and tests for parsing/click handling.
 
+20. Multi-tab conversation switch state stability
+- Switching conversation tabs with `Ctrl+Tab` / `Ctrl+Shift+Tab` now preserves the per-tab reading scroll position reliably.
+- Returning to a previous tab no longer causes delayed jump caused by code-block re-layout after tab restore.
+- Timeline/navigation state binding is isolated per conversation tab container to prevent cross-tab overwrite.
+
 ## Arch Linux Quick Install
 
 ```bash

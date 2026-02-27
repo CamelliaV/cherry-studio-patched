@@ -41,6 +41,7 @@ const logger = loggerService.withContext('Chat')
 const CONVERSATION_TABS_HEIGHT = 54
 const CONVERSATION_TABS_SCROLL_KEY = 'home:conversation-tabs:scroll-left:v1'
 const CONVERSATION_TABS_SWITCH_THROTTLE_MS = 180
+const buildConversationContainerId = (panelId: string) => `messages-topic-${panelId}`
 
 interface Props {
   assistant: Assistant
@@ -72,6 +73,13 @@ interface ConversationWorkspaceItem {
   id: string
   name: string
   tabCount: number
+}
+
+interface ConversationTabPanel {
+  id: string
+  assistant: Assistant
+  topic: Topic
+  isActive: boolean
 }
 
 const Chat: FC<Props> = (props) => {
@@ -145,6 +153,11 @@ const Chat: FC<Props> = (props) => {
 
   const contentSearchFilter: NodeFilter = {
     acceptNode(node) {
+      const conversationPanel = node.parentElement?.closest('[data-conversation-tab-id]') as HTMLElement | null
+      if (conversationPanel && conversationPanel.dataset.active !== 'true') {
+        return NodeFilter.FILTER_REJECT
+      }
+
       const container = node.parentElement?.closest('.message-content-container')
       if (!container) return NodeFilter.FILTER_REJECT
 
@@ -196,6 +209,76 @@ const Chat: FC<Props> = (props) => {
   const mainHeight = isTopNavbar ? 'calc(100vh - var(--navbar-height) - 6px)' : 'calc(100vh - var(--navbar-height))'
   const showWorkspaceSwitcher = activeTopicOrSession === 'topic' && props.workspaces.length > 0
   const showConversationTabs = activeTopicOrSession === 'topic' && conversationTabs.length > 0
+  const conversationTabPanels = useMemo<ConversationTabPanel[]>(() => {
+    if (activeTopicOrSession !== 'topic') {
+      return []
+    }
+
+    const fallbackTabId = `${props.assistant.id}:${props.activeTopic.id}`
+    const fallbackTab: ConversationTabItem = {
+      id: fallbackTabId,
+      assistantId: props.assistant.id,
+      topicId: props.activeTopic.id,
+      assistantName: props.assistant.name,
+      topicName: props.activeTopic.name || props.activeTopic.id
+    }
+
+    const normalizedTabs = conversationTabs.length > 0 ? [...conversationTabs] : [fallbackTab]
+    if (
+      !normalizedTabs.some((tab) => tab.assistantId === fallbackTab.assistantId && tab.topicId === fallbackTab.topicId)
+    ) {
+      normalizedTabs.push(fallbackTab)
+    }
+
+    const dedupedPanels = new Map<string, Omit<ConversationTabPanel, 'isActive'>>()
+
+    normalizedTabs.forEach((tab) => {
+      const tabAssistant =
+        tab.assistantId === assistant.id ? assistant : assistants.find((candidate) => candidate.id === tab.assistantId)
+      const tabTopic = tabAssistant?.topics.find((candidate) => candidate.id === tab.topicId)
+      if (!tabAssistant || !tabTopic) {
+        return
+      }
+
+      const panelId = tab.id || `${tab.assistantId}:${tab.topicId}`
+      if (!dedupedPanels.has(panelId)) {
+        dedupedPanels.set(panelId, { id: panelId, assistant: tabAssistant, topic: tabTopic })
+      }
+    })
+
+    const panels = [...dedupedPanels.values()]
+    if (panels.length === 0) {
+      return []
+    }
+
+    const activePanelId = panels.some((panel) => panel.id === activeConversationTabId)
+      ? activeConversationTabId
+      : (panels.find((panel) => panel.assistant.id === props.assistant.id && panel.topic.id === props.activeTopic.id)
+          ?.id ?? panels[0].id)
+
+    return panels.map((panel) => ({
+      ...panel,
+      isActive: panel.id === activePanelId
+    }))
+  }, [
+    activeConversationTabId,
+    activeTopicOrSession,
+    assistant,
+    assistants,
+    conversationTabs,
+    props.activeTopic.id,
+    props.activeTopic.name,
+    props.assistant.id,
+    props.assistant.name
+  ])
+  const activeConversationPanel = useMemo(
+    () => conversationTabPanels.find((panel) => panel.isActive),
+    [conversationTabPanels]
+  )
+  const activeConversationContainerId = useMemo(
+    () => (activeConversationPanel ? buildConversationContainerId(activeConversationPanel.id) : 'messages'),
+    [activeConversationPanel]
+  )
   const activeWorkspace = useMemo(
     () => props.workspaces.find((workspace) => workspace.id === props.activeWorkspaceId),
     [props.activeWorkspaceId, props.workspaces]
@@ -526,14 +609,26 @@ const Chat: FC<Props> = (props) => {
                 <div className="flex min-h-0 flex-1 flex-col justify-between">
                   {activeTopicOrSession === 'topic' && (
                     <>
-                      <Messages
-                        key={props.activeTopic.id}
-                        assistant={assistant}
-                        topic={props.activeTopic}
-                        setActiveTopic={props.setActiveTopic}
-                        onComponentUpdate={messagesComponentUpdateHandler}
-                        onFirstUpdate={messagesComponentFirstUpdateHandler}
-                      />
+                      <ConversationPanels>
+                        {conversationTabPanels.map((panel) => (
+                          <ConversationPanel
+                            key={panel.id}
+                            data-conversation-tab-id={panel.id}
+                            data-active={panel.isActive ? 'true' : 'false'}
+                            $active={panel.isActive}
+                            aria-hidden={!panel.isActive}>
+                            <Messages
+                              assistant={panel.assistant}
+                              topic={panel.topic}
+                              setActiveTopic={props.setActiveTopic}
+                              onComponentUpdate={messagesComponentUpdateHandler}
+                              onFirstUpdate={messagesComponentFirstUpdateHandler}
+                              isActive={panel.isActive}
+                              containerId={buildConversationContainerId(panel.id)}
+                            />
+                          </ConversationPanel>
+                        ))}
+                      </ConversationPanels>
                       <ContentSearch
                         ref={contentSearchRef}
                         searchTarget={mainRef as React.RefObject<HTMLElement>}
@@ -541,8 +636,12 @@ const Chat: FC<Props> = (props) => {
                         includeUser={filterIncludeUser}
                         onIncludeUserChange={userOutlinedItemClickHandler}
                       />
-                      {messageNavigation === 'buttons' && <ChatNavigation containerId="messages" />}
-                      <Inputbar assistant={assistant} setActiveTopic={props.setActiveTopic} topic={props.activeTopic} />
+                      {messageNavigation === 'buttons' && <ChatNavigation containerId={activeConversationContainerId} />}
+                      <Inputbar
+                        assistant={activeConversationPanel?.assistant || assistant}
+                        setActiveTopic={props.setActiveTopic}
+                        topic={activeConversationPanel?.topic || props.activeTopic}
+                      />
                     </>
                   )}
                   {activeTopicOrSession === 'session' && !activeAgentId && <AgentInvalid />}
@@ -627,6 +726,23 @@ const MainContent = styled.div`
   flex-direction: column;
   min-height: 0;
   height: 100%;
+`
+
+const ConversationPanels = styled.div`
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+`
+
+const ConversationPanel = styled.div<{ $active: boolean }>`
+  position: absolute;
+  inset: 0;
+  display: flex;
+  min-height: 0;
+  visibility: ${(props) => (props.$active ? 'visible' : 'hidden')};
+  pointer-events: ${(props) => (props.$active ? 'auto' : 'none')};
+  z-index: ${(props) => (props.$active ? 1 : 0)};
 `
 
 const WorkspaceSwitcherContainer = styled.div`

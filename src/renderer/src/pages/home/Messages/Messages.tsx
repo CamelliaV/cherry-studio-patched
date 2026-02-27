@@ -44,13 +44,26 @@ interface MessagesProps {
   setActiveTopic: (topic: Topic) => void
   onComponentUpdate?(): void
   onFirstUpdate?(): void
+  isActive?: boolean
+  containerId?: string
 }
 
 const logger = loggerService.withContext('Messages')
 
-const Messages: React.FC<MessagesProps> = ({ assistant, topic, setActiveTopic, onComponentUpdate, onFirstUpdate }) => {
+const Messages: React.FC<MessagesProps> = ({
+  assistant,
+  topic,
+  setActiveTopic,
+  onComponentUpdate,
+  onFirstUpdate,
+  isActive = true,
+  containerId
+}) => {
+  const messagesContainerId = containerId || `messages-topic-${topic.id}`
   const { containerRef: scrollContainerRef, handleScroll: handleScrollPosition } = useScrollPosition(
-    `topic-${topic.id}`
+    `topic-${topic.id}`,
+    undefined,
+    isActive
   )
   const [displayMessages, setDisplayMessages] = useState<Message[]>([])
   const [isProcessingContext, setIsProcessingContext] = useState(false)
@@ -62,7 +75,7 @@ const Messages: React.FC<MessagesProps> = ({ assistant, topic, setActiveTopic, o
   const messages = useTopicMessages(topic.id)
   const { clearTopicMessages, deleteMessage, createTopicBranch } = useMessageOperations(topic)
 
-  const { isMultiSelectMode, handleSelectMessage } = useChatContext(topic)
+  const { isMultiSelectMode, handleSelectMessage } = useChatContext(topic, isActive)
 
   const messageElements = useRef<Map<string, HTMLElement>>(new Map())
   const messagesRef = useRef<Message[]>(messages)
@@ -108,6 +121,10 @@ const Messages: React.FC<MessagesProps> = ({ assistant, topic, setActiveTopic, o
   )
 
   useEffect(() => {
+    if (!isActive) {
+      return
+    }
+
     const unsubscribes = [
       EventEmitter.on(EVENT_NAMES.SEND_MESSAGE, scrollToBottom),
       EventEmitter.on(EVENT_NAMES.CLEAR_MESSAGES, async (data: Topic) => {
@@ -228,35 +245,51 @@ const Messages: React.FC<MessagesProps> = ({ assistant, topic, setActiveTopic, o
 
     return () => unsubscribes.forEach((unsub) => unsub())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assistant, dispatch, scrollToBottom, topic, isProcessingContext])
+  }, [assistant, dispatch, isActive, scrollToBottom, topic, isProcessingContext])
 
   useEffect(() => {
+    if (!isActive) {
+      return
+    }
+
     runAsyncFunction(async () => {
       EventEmitter.emit(EVENT_NAMES.ESTIMATED_TOKEN_COUNT, {
         tokensCount: await estimateHistoryTokens(assistant, messages),
         contextCount: getContextCount(assistant, messages)
       })
     }).then(() => onFirstUpdate?.())
-  }, [assistant, messages, onFirstUpdate])
+  }, [assistant, isActive, messages, onFirstUpdate])
 
-  useShortcut('copy_last_message', () => {
-    const lastMessage = last(messages)
-    if (lastMessage) {
-      navigator.clipboard.writeText(getMainTextContent(lastMessage))
-      window.toast.success(t('message.copy.success'))
-    }
-  })
+  useShortcut(
+    'copy_last_message',
+    () => {
+      const lastMessage = last(messages)
+      if (lastMessage) {
+        navigator.clipboard.writeText(getMainTextContent(lastMessage))
+        window.toast.success(t('message.copy.success'))
+      }
+    },
+    { enabled: isActive }
+  )
 
-  useShortcut('edit_last_user_message', () => {
-    const lastUserMessage = messagesRef.current.findLast((m) => m.role === 'user' && m.type !== 'clear')
-    if (lastUserMessage) {
-      EventEmitter.emit(EVENT_NAMES.EDIT_MESSAGE, lastUserMessage.id)
-    }
-  })
+  useShortcut(
+    'edit_last_user_message',
+    () => {
+      const lastUserMessage = messagesRef.current.findLast((m) => m.role === 'user' && m.type !== 'clear')
+      if (lastUserMessage) {
+        EventEmitter.emit(EVENT_NAMES.EDIT_MESSAGE, lastUserMessage.id)
+      }
+    },
+    { enabled: isActive }
+  )
 
   useEffect(() => {
+    if (!isActive) {
+      return
+    }
+
     requestAnimationFrame(() => onComponentUpdate?.())
-  }, [onComponentUpdate])
+  }, [isActive, onComponentUpdate])
 
   // NOTE: 因为displayMessages是倒序的，所以得到的groupedMessages每个group内部也是倒序的，需要再倒一遍
   const groupedMessages = useMemo(() => {
@@ -277,7 +310,7 @@ const Messages: React.FC<MessagesProps> = ({ assistant, topic, setActiveTopic, o
   return (
     <MessagesViewport>
       <MessagesContainer
-        id="messages"
+        id={messagesContainerId}
         className="messages-container"
         ref={scrollContainerRef}
         key={assistant.id}
@@ -298,14 +331,23 @@ const Messages: React.FC<MessagesProps> = ({ assistant, topic, setActiveTopic, o
 
           {showPrompt && <Prompt assistant={assistant} key={assistant.prompt} topic={topic} />}
         </NarrowLayout>
-        <SelectionBox
-          isMultiSelectMode={isMultiSelectMode}
-          scrollContainerRef={scrollContainerRef}
-          messageElements={messageElements.current}
-          handleSelectMessage={handleSelectMessage}
-        />
+        {isActive && (
+          <SelectionBox
+            isMultiSelectMode={isMultiSelectMode}
+            scrollContainerRef={scrollContainerRef}
+            messageElements={messageElements.current}
+            handleSelectMessage={handleSelectMessage}
+          />
+        )}
       </MessagesContainer>
-      {showMessageAnchor && <MessageAnchorLine messages={displayMessages} persistKey={`topic-${topic.id}`} />}
+      {showMessageAnchor && (
+        <MessageAnchorLine
+          messages={displayMessages}
+          persistKey={`topic-${topic.id}`}
+          containerId={messagesContainerId}
+          isActive={isActive}
+        />
+      )}
     </MessagesViewport>
   )
 }

@@ -109,7 +109,13 @@ const AgentSessionMessages: React.FC<Props> = ({ agentId, sessionId }) => {
           </ContextMenu>
         </NarrowLayout>
       </MessagesContainer>
-      {showMessageAnchor && <MessageAnchorLine messages={displayMessages} persistKey={`agent-session-${sessionId}`} />}
+      {showMessageAnchor && (
+        <MessageAnchorLine
+          messages={displayMessages}
+          persistKey={`agent-session-${sessionId}`}
+          containerId="messages"
+        />
+      )}
     </MessagesViewport>
   )
 }

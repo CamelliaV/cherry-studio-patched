@@ -12,7 +12,7 @@ import { useDispatch, useSelector, useStore } from 'react-redux'
 
 const logger = loggerService.withContext('useChatContext')
 
-export const useChatContext = (activeTopic: Topic) => {
+export const useChatContext = (activeTopic: Topic, enabled: boolean = true) => {
   const { t } = useTranslation()
   const dispatch = useDispatch()
   const store = useStore<RootState>()
@@ -24,15 +24,23 @@ export const useChatContext = (activeTopic: Topic) => {
   const selectedMessageIds = useSelector((state: RootState) => state.runtime.chat.selectedMessageIds)
 
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
+
     const unsubscribe = EventEmitter.on(EVENT_NAMES.CHANGE_TOPIC, () => {
       dispatch(toggleMultiSelectMode(false))
     })
     return () => unsubscribe()
-  }, [dispatch])
+  }, [dispatch, enabled])
 
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
+
     dispatch(setActiveTopic(activeTopic))
-  }, [dispatch, activeTopic])
+  }, [dispatch, enabled, activeTopic])
 
   const handleToggleMultiSelectMode = useCallback(
     (value: boolean) => {
