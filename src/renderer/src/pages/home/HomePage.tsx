@@ -8,6 +8,7 @@ import { useShortcut } from '@renderer/hooks/useShortcuts'
 import { useActiveTopic } from '@renderer/hooks/useTopic'
 import { backgroundSlideshowService } from '@renderer/services/BackgroundSlideshowService'
 import NavigationService from '@renderer/services/NavigationService'
+import store from '@renderer/store'
 import { newMessagesActions } from '@renderer/store/newMessage'
 import { setActiveAgentId, setActiveTopicOrSessionAction } from '@renderer/store/runtime'
 import type { Assistant, Topic } from '@renderer/types'
@@ -466,7 +467,9 @@ const HomePage: FC = () => {
         topicId: targetTopic.id
       })
       _setActiveTopic((prev) => (targetTopic.id === prev.id ? prev : targetTopic))
-      dispatch(newMessagesActions.setTopicFulfilled({ topicId: targetTopic.id, fulfilled: false }))
+      if (store.getState().messages.fulfilledByTopic[targetTopic.id]) {
+        dispatch(newMessagesActions.setTopicFulfilled({ topicId: targetTopic.id, fulfilled: false }))
+      }
       dispatch(setActiveTopicOrSessionAction('topic'))
     },
     [
@@ -562,7 +565,9 @@ const HomePage: FC = () => {
         return
       }
 
-      activateConversation(targetAssistant, targetTopic, activeWorkspace?.id)
+      startTransition(() => {
+        activateConversation(targetAssistant, targetTopic, activeWorkspace?.id)
+      })
     },
     [activateConversation, activeWorkspace?.id, assistants]
   )

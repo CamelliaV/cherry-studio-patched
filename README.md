@@ -118,6 +118,12 @@ This README reflects only the new functionality added in this patch series.
 - Returning to a previous tab no longer causes delayed jump caused by code-block re-layout after tab restore.
 - Timeline/navigation state binding is isolated per conversation tab container to prevent cross-tab overwrite.
 
+21. Conversation switching and history rendering polish
+- Conversation tab panels now stay mounted to enable instant tab return with more reliable per-tab state retention.
+- Added a short loading skeleton + transition overlay when switching into conversations whose content is still loading.
+- `Ctrl+Tab` / `Ctrl+Shift+Tab` handling now uses key latching to avoid repeated accidental tab hops while holding keys.
+- Chat flow history rendering was refactored to strongly typed data processing with memoized selectors for lower re-render overhead.
+
 ## Arch Linux Quick Install
 
 ```bash

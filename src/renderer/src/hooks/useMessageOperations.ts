@@ -5,7 +5,7 @@ import { appendMessageTrace, pauseTrace, restartTrace } from '@renderer/services
 import { estimateUserPromptUsage } from '@renderer/services/TokenService'
 import store, { type RootState, useAppDispatch, useAppSelector } from '@renderer/store'
 import { updateOneBlock } from '@renderer/store/messageBlock'
-import { newMessagesActions, selectMessagesForTopic } from '@renderer/store/newMessage'
+import { makeSelectMessagesForTopic, newMessagesActions, selectMessagesForTopic } from '@renderer/store/newMessage'
 import {
   appendAssistantResponseThunk,
   clearTopicMessagesThunk,
@@ -25,7 +25,7 @@ import type { Message, MessageBlock } from '@renderer/types/newMessage'
 import { MessageBlockStatus, MessageBlockType } from '@renderer/types/newMessage'
 import { abortCompletion } from '@renderer/utils/abortController'
 import { difference, throttle } from 'lodash'
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 
 const logger = loggerService.withContext('UseMessageOperations')
 
@@ -466,7 +466,8 @@ export function useMessageOperations(topic: Topic) {
 }
 
 export const useTopicMessages = (topicId: string) => {
-  return useAppSelector((state) => selectMessagesForTopic(state, topicId))
+  const selectMessagesForTopicById = useMemo(makeSelectMessagesForTopic, [])
+  return useAppSelector((state) => selectMessagesForTopicById(state, topicId))
 }
 
 export const useTopicLoading = (topic: Topic) => {

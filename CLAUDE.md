@@ -29,6 +29,7 @@ If the skill is unavailable, directly read `.agents/skills/gh-create-pr/SKILL.md
 ## Development Commands
 
 - **Install**: `pnpm install` - Install all project dependencies
+- **Start**: `pnpm start` - Launch the app with the standard local startup flow
 - **Development**: `pnpm dev` - Runs Electron app in development mode with hot reload
 - **Debug**: `pnpm debug` - Starts with debugging enabled, use `chrome://inspect` to attach debugger
 - **Build Check**: `pnpm build:check` - **REQUIRED** before commits (lint + test + typecheck)

@@ -15,6 +15,7 @@ import { useShortcut } from '@renderer/hooks/useShortcuts'
 import { useShowTopics } from '@renderer/hooks/useStore'
 import { useTimer } from '@renderer/hooks/useTimer'
 import { EVENT_NAMES, EventEmitter } from '@renderer/services/EventService'
+import store from '@renderer/store'
 import type { Assistant, Topic } from '@renderer/types'
 import { classNames } from '@renderer/utils'
 import { buildAgentSessionTopicId } from '@renderer/utils/agentSession'
@@ -28,6 +29,7 @@ import { useTranslation } from 'react-i18next'
 import styled from 'styled-components'
 
 import ChatNavbar from './components/ChatNavBar'
+import ConversationLoadingState from './components/ConversationLoadingState'
 import AgentSessionInputbar from './Inputbar/AgentSessionInputbar'
 import { PinnedTodoPanel } from './Inputbar/components/PinnedTodoPanel'
 import Inputbar from './Inputbar/Inputbar'
@@ -89,12 +91,12 @@ const Chat: FC<Props> = (props) => {
   const { t } = useTranslation()
   const { topicPosition, messageStyle, messageNavigation } = useSettings()
   const { showTopics } = useShowTopics()
-  const { isMultiSelectMode } = useChatContext(props.activeTopic)
+  const { isMultiSelectMode } = useChatContext(props.activeTopic, true)
   const { isTopNavbar } = useNavbarPosition()
   const { chat } = useRuntime()
   const { activeTopicOrSession, activeAgentId, activeSessionIdMap } = chat
   const activeSessionId = activeAgentId ? activeSessionIdMap[activeAgentId] : null
-  const { apiServer } = useSettings()
+  const { apiServer, backgroundSlideshowEnabled, backgroundSlideshowOpacity } = useSettings()
   const sessionAgentId = activeTopicOrSession === 'session' ? activeAgentId : null
   const { createDefaultSession } = useCreateDefaultSession(sessionAgentId)
 
@@ -103,7 +105,10 @@ const Chat: FC<Props> = (props) => {
   const conversationTabsRef = React.useRef<HTMLDivElement>(null)
   const [filterIncludeUser, setFilterIncludeUser] = useState(false)
 
-  const { setTimeoutTimer } = useTimer()
+  const { setTimeoutTimer, clearTimeoutTimer } = useTimer()
+  const [isConversationSwitching, setIsConversationSwitching] = useState(false)
+  const [isConversationContentPending, setIsConversationContentPending] = useState(false)
+  const ctrlTabKeyLatchRef = React.useRef(false)
 
   useHotkeys('esc', () => {
     contentSearchRef.current?.disable()
@@ -151,6 +156,79 @@ const Chat: FC<Props> = (props) => {
     }
   )
 
+  const selectConversationTab = useCallback(
+    (assistantId: string, topicId: string) => {
+      if (`${assistantId}:${topicId}` === activeConversationTabId) {
+        return
+      }
+      onConversationTabSelect(assistantId, topicId)
+    },
+    [activeConversationTabId, onConversationTabSelect]
+  )
+
+  useEffect(() => {
+    return () => {
+      clearTimeoutTimer('chat:conversationSwitchAnimation')
+      clearTimeoutTimer('chat:conversationContentPending')
+    }
+  }, [clearTimeoutTimer])
+
+  const renderedConversationTabId = activeConversationTabId
+
+  useEffect(() => {
+    if (activeTopicOrSession !== 'topic' || !renderedConversationTabId) {
+      setIsConversationContentPending(false)
+      clearTimeoutTimer('chat:conversationContentPending')
+      return
+    }
+
+    // Extract topicId from renderedConversationTabId (format: "assistantId:topicId")
+    const topicId = renderedConversationTabId.split(':')[1]
+    if (!topicId) {
+      setIsConversationContentPending(false)
+      return
+    }
+
+    // Check if messages are already loaded for this topic
+    const state = store.getState()
+    const messagesLoaded = state.messages.messageIdsByTopic[topicId]?.length > 0
+    const isLoading = state.messages.loadingByTopic[topicId]
+
+    // Only show loading state if messages aren't cached and we're actually loading
+    if (!messagesLoaded || isLoading) {
+      setIsConversationContentPending(true)
+      setTimeoutTimer(
+        'chat:conversationContentPending',
+        () => {
+          setIsConversationContentPending(false)
+        },
+        780
+      )
+    } else {
+      setIsConversationContentPending(false)
+    }
+
+    return () => {
+      clearTimeoutTimer('chat:conversationContentPending')
+    }
+  }, [activeTopicOrSession, clearTimeoutTimer, renderedConversationTabId, setTimeoutTimer])
+
+  useEffect(() => {
+    if (activeTopicOrSession !== 'topic' || conversationTabs.length <= 1 || !renderedConversationTabId) {
+      return
+    }
+
+    const tabsElement = conversationTabsRef.current
+    if (!tabsElement) {
+      return
+    }
+
+    const activeTab = tabsElement.querySelector<HTMLElement>(
+      `[data-conversation-tab-id="${renderedConversationTabId}"]`
+    )
+    activeTab?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
+  }, [activeTopicOrSession, conversationTabs.length, renderedConversationTabId])
+
   const contentSearchFilter: NodeFilter = {
     acceptNode(node) {
       const conversationPanel = node.parentElement?.closest('[data-conversation-tab-id]') as HTMLElement | null
@@ -190,21 +268,37 @@ const Chat: FC<Props> = (props) => {
     })
   }
 
-  let firstUpdateCompleted = false
-  const firstUpdateOrNoFirstUpdateHandler = debounce(() => {
-    contentSearchRef.current?.silentSearch()
-  }, 10)
+  const firstUpdateCompletedRef = React.useRef(false)
+  const firstUpdateOrNoFirstUpdateHandler = useMemo(
+    () =>
+      debounce(() => {
+        contentSearchRef.current?.silentSearch()
+      }, 10),
+    []
+  )
 
-  const messagesComponentUpdateHandler = () => {
-    if (firstUpdateCompleted) {
+  useEffect(() => {
+    return () => {
+      firstUpdateOrNoFirstUpdateHandler.cancel()
+    }
+  }, [firstUpdateOrNoFirstUpdateHandler])
+
+  const messagesComponentUpdateHandler = useCallback(() => {
+    if (firstUpdateCompletedRef.current) {
       firstUpdateOrNoFirstUpdateHandler()
     }
-  }
+  }, [firstUpdateOrNoFirstUpdateHandler])
 
-  const messagesComponentFirstUpdateHandler = () => {
-    setTimeoutTimer('messagesComponentFirstUpdateHandler', () => (firstUpdateCompleted = true), 300)
+  const messagesComponentFirstUpdateHandler = useCallback(() => {
+    setTimeoutTimer(
+      'messagesComponentFirstUpdateHandler',
+      () => {
+        firstUpdateCompletedRef.current = true
+      },
+      300
+    )
     firstUpdateOrNoFirstUpdateHandler()
-  }
+  }, [firstUpdateOrNoFirstUpdateHandler, setTimeoutTimer])
 
   const mainHeight = isTopNavbar ? 'calc(100vh - var(--navbar-height) - 6px)' : 'calc(100vh - var(--navbar-height))'
   const showWorkspaceSwitcher = activeTopicOrSession === 'topic' && props.workspaces.length > 0
@@ -251,8 +345,8 @@ const Chat: FC<Props> = (props) => {
       return []
     }
 
-    const activePanelId = panels.some((panel) => panel.id === activeConversationTabId)
-      ? activeConversationTabId
+    const activePanelId = panels.some((panel) => panel.id === renderedConversationTabId)
+      ? renderedConversationTabId
       : (panels.find((panel) => panel.assistant.id === props.assistant.id && panel.topic.id === props.activeTopic.id)
           ?.id ?? panels[0].id)
 
@@ -261,7 +355,7 @@ const Chat: FC<Props> = (props) => {
       isActive: panel.id === activePanelId
     }))
   }, [
-    activeConversationTabId,
+    renderedConversationTabId,
     activeTopicOrSession,
     assistant,
     assistants,
@@ -271,6 +365,24 @@ const Chat: FC<Props> = (props) => {
     props.assistant.id,
     props.assistant.name
   ])
+
+  useEffect(() => {
+    if (conversationTabPanels.length === 0) {
+      return
+    }
+
+    // No need to track recent panels anymore since we keep all tabs mounted
+  }, [conversationTabPanels])
+
+  const renderedConversationPanels = useMemo(() => {
+    if (conversationTabPanels.length === 0) {
+      return []
+    }
+
+    // Keep all conversation tabs mounted for instant switching and scroll position preservation
+    return conversationTabPanels
+  }, [conversationTabPanels])
+
   const activeConversationPanel = useMemo(
     () => conversationTabPanels.find((panel) => panel.isActive),
     [conversationTabPanels]
@@ -285,9 +397,9 @@ const Chat: FC<Props> = (props) => {
   )
   const handleContextMenuSelect = useCallback(
     (nextAssistant: Assistant, nextTopic: Topic) => {
-      onConversationTabSelect(nextAssistant.id, nextTopic.id)
+      selectConversationTab(nextAssistant.id, nextTopic.id)
     },
-    [onConversationTabSelect]
+    [selectConversationTab]
   )
   const { getAssistantContextMenuItems, getTopicContextMenuItems } = useNavigatorContextMenus({
     activeAssistant: props.assistant,
@@ -346,10 +458,49 @@ const Chat: FC<Props> = (props) => {
         return
       }
 
-      onConversationTabSelect(nextTab.assistantId, nextTab.topicId)
+      selectConversationTab(nextTab.assistantId, nextTab.topicId)
     },
-    [activeConversationTabId, conversationTabs, onConversationTabSelect]
+    [activeConversationTabId, conversationTabs, selectConversationTab]
   )
+
+  const lastRenderedConversationTabIdRef = React.useRef(renderedConversationTabId)
+
+  useEffect(() => {
+    if (activeTopicOrSession !== 'topic') {
+      setIsConversationSwitching(false)
+      lastRenderedConversationTabIdRef.current = renderedConversationTabId
+      return
+    }
+
+    if (!renderedConversationTabId || lastRenderedConversationTabIdRef.current === renderedConversationTabId) {
+      return
+    }
+
+    lastRenderedConversationTabIdRef.current = renderedConversationTabId
+
+    // Extract topicId to check if content is cached
+    const topicId = renderedConversationTabId.split(':')[1]
+    if (topicId) {
+      const state = store.getState()
+      const messagesLoaded = state.messages.messageIdsByTopic[topicId]?.length > 0
+      const isLoading = state.messages.loadingByTopic[topicId]
+
+      // Only show switching overlay if content needs to load
+      if (!messagesLoaded || isLoading) {
+        setIsConversationSwitching(true)
+        setTimeoutTimer(
+          'chat:conversationSwitchAnimation',
+          () => {
+            setIsConversationSwitching(false)
+          },
+          220
+        )
+      } else {
+        // Content is cached, no need for overlay
+        setIsConversationSwitching(false)
+      }
+    }
+  }, [activeTopicOrSession, renderedConversationTabId, setTimeoutTimer])
 
   const throttledWheelTabSwitch = useMemo(
     () =>
@@ -402,31 +553,48 @@ const Chat: FC<Props> = (props) => {
     setTimeoutTimer('chat:restoreConversationTabsScroll', restoreConversationTabsScroll, 80)
   }, [conversationTabs.length, restoreConversationTabsScroll, setTimeoutTimer, showConversationTabs])
 
-  useHotkeys(
-    'ctrl+tab',
-    (event) => {
-      event.preventDefault()
-      switchConversationTabByOffset(1)
-    },
-    {
-      enabled: showConversationTabs && conversationTabs.length > 1,
-      preventDefault: true,
-      enableOnFormTags: true
+  useEffect(() => {
+    if (!showConversationTabs || conversationTabs.length <= 1) {
+      ctrlTabKeyLatchRef.current = false
+      return
     }
-  )
 
-  useHotkeys(
-    'ctrl+shift+tab',
-    (event) => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!event.ctrlKey || event.key !== 'Tab') {
+        return
+      }
+
       event.preventDefault()
-      switchConversationTabByOffset(-1)
-    },
-    {
-      enabled: showConversationTabs && conversationTabs.length > 1,
-      preventDefault: true,
-      enableOnFormTags: true
+      event.stopPropagation()
+
+      if (ctrlTabKeyLatchRef.current) {
+        return
+      }
+      ctrlTabKeyLatchRef.current = true
+      switchConversationTabByOffset(event.shiftKey ? -1 : 1)
     }
-  )
+
+    const releaseLatch = (event: KeyboardEvent) => {
+      if (event.key === 'Tab' || event.key === 'Control') {
+        ctrlTabKeyLatchRef.current = false
+      }
+    }
+
+    const resetLatch = () => {
+      ctrlTabKeyLatchRef.current = false
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true)
+    window.addEventListener('keyup', releaseLatch, true)
+    window.addEventListener('blur', resetLatch)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true)
+      window.removeEventListener('keyup', releaseLatch, true)
+      window.removeEventListener('blur', resetLatch)
+      ctrlTabKeyLatchRef.current = false
+    }
+  }, [conversationTabs.length, showConversationTabs, switchConversationTabByOffset])
 
   const handleRenameWorkspace = useCallback(async () => {
     if (!activeWorkspace) {
@@ -542,7 +710,7 @@ const Chat: FC<Props> = (props) => {
                     onScroll={handleConversationTabsScroll}
                     onWheel={handleConversationTabsWheel}>
                     {conversationTabs.map((tab) => {
-                      const isActive = tab.id === activeConversationTabId
+                      const isActive = tab.id === renderedConversationTabId
                       const tabAssistant = assistants.find((candidate) => candidate.id === tab.assistantId)
                       const tabTopic = tabAssistant?.topics.find((candidate) => candidate.id === tab.topicId)
 
@@ -550,6 +718,7 @@ const Chat: FC<Props> = (props) => {
                         <ConversationTabButton
                           key={tab.id}
                           type="button"
+                          data-conversation-tab-id={tab.id}
                           $active={isActive}
                           onMouseDown={(event) => {
                             if (event.button !== 1 || conversationTabs.length <= 1) {
@@ -565,7 +734,7 @@ const Chat: FC<Props> = (props) => {
                             event.stopPropagation()
                             props.onConversationTabClose(tab.assistantId, tab.topicId)
                           }}
-                          onClick={() => props.onConversationTabSelect(tab.assistantId, tab.topicId)}>
+                          onClick={() => selectConversationTab(tab.assistantId, tab.topicId)}>
                           <ConversationTabText $active={isActive}>
                             {tabAssistant && tabTopic ? (
                               <Dropdown
@@ -610,12 +779,30 @@ const Chat: FC<Props> = (props) => {
                   {activeTopicOrSession === 'topic' && (
                     <>
                       <ConversationPanels>
-                        {conversationTabPanels.map((panel) => (
+                        <AnimatePresence mode="wait">
+                          {isConversationContentPending && (
+                            <ConversationLoadingState
+                              key="loading"
+                              visible={isConversationContentPending}
+                              backgroundEnabled={backgroundSlideshowEnabled}
+                              backgroundOpacity={backgroundSlideshowOpacity}
+                            />
+                          )}
+                        </AnimatePresence>
+                        <ConversationSwitchOverlay
+                          $visible={isConversationSwitching}
+                          $backgroundEnabled={backgroundSlideshowEnabled}
+                          $backgroundOpacity={backgroundSlideshowOpacity}
+                          aria-hidden
+                        />
+                        {renderedConversationPanels.map((panel) => (
                           <ConversationPanel
                             key={panel.id}
                             data-conversation-tab-id={panel.id}
                             data-active={panel.isActive ? 'true' : 'false'}
                             $active={panel.isActive}
+                            $switching={isConversationSwitching}
+                            $pending={isConversationContentPending}
                             aria-hidden={!panel.isActive}>
                             <Messages
                               assistant={panel.assistant}
@@ -636,7 +823,9 @@ const Chat: FC<Props> = (props) => {
                         includeUser={filterIncludeUser}
                         onIncludeUserChange={userOutlinedItemClickHandler}
                       />
-                      {messageNavigation === 'buttons' && <ChatNavigation containerId={activeConversationContainerId} />}
+                      {messageNavigation === 'buttons' && (
+                        <ChatNavigation containerId={activeConversationContainerId} />
+                      )}
                       <Inputbar
                         assistant={activeConversationPanel?.assistant || assistant}
                         setActiveTopic={props.setActiveTopic}
@@ -735,14 +924,72 @@ const ConversationPanels = styled.div`
   position: relative;
 `
 
-const ConversationPanel = styled.div<{ $active: boolean }>`
+const ConversationSwitchOverlay = styled.div<{
+  $visible: boolean
+  $backgroundEnabled: boolean
+  $backgroundOpacity: number
+}>`
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  opacity: ${(props) => (props.$visible ? 1 : 0)};
+  background: ${(props) => {
+    if (props.$backgroundEnabled) {
+      // When background is enabled, use the user's opacity setting
+      const overlayOpacity = Math.max(0.3, props.$backgroundOpacity * 0.8)
+      return `linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--color-background) ${overlayOpacity * 100}%, transparent) 0%,
+        color-mix(in srgb, var(--color-background) ${overlayOpacity * 0.85 * 100}%, transparent) 100%
+      )`
+    }
+    // When no background, use subtle overlay
+    return `linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--color-background) 75%, transparent) 0%,
+      color-mix(in srgb, var(--color-background) 65%, transparent) 100%
+    )`
+  }};
+  backdrop-filter: ${(props) => (props.$backgroundEnabled ? 'blur(4px)' : 'blur(2px)')};
+  transition:
+    opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+    backdrop-filter 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+`
+
+const ConversationPanel = styled.div<{ $active: boolean; $switching: boolean; $pending: boolean }>`
   position: absolute;
   inset: 0;
   display: flex;
   min-height: 0;
-  visibility: ${(props) => (props.$active ? 'visible' : 'hidden')};
-  pointer-events: ${(props) => (props.$active ? 'auto' : 'none')};
-  z-index: ${(props) => (props.$active ? 1 : 0)};
+  visibility: ${(props) => (props.$active || props.$switching ? 'visible' : 'hidden')};
+  pointer-events: ${(props) => (props.$active && !props.$pending ? 'auto' : 'none')};
+  opacity: ${(props) => {
+    if (props.$pending) return 0
+    if (props.$active) return 1
+    return 0
+  }};
+  transform: ${(props) => {
+    if (props.$pending) return 'translate3d(16px, 0, 0) scale(0.98)'
+    if (props.$active) return 'translate3d(0, 0, 0) scale(1)'
+    return 'translate3d(16px, 0, 0) scale(0.98)'
+  }};
+  z-index: ${(props) => (props.$active ? 2 : props.$switching ? 1 : 0)};
+  contain: layout paint style;
+  backface-visibility: hidden;
+  background: transparent;
+  transition:
+    opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.25s cubic-bezier(0.34, 1.2, 0.64, 1);
+
+  /* Only animate when switching (not on initial render or re-renders) */
+  ${(props) =>
+    props.$switching &&
+    props.$active &&
+    !props.$pending &&
+    `
+    will-change: opacity, transform;
+  `}
 `
 
 const WorkspaceSwitcherContainer = styled.div`
@@ -824,6 +1071,7 @@ const ConversationTabsContainer = styled.div`
   background: transparent;
   overflow-x: auto;
   overflow-y: hidden;
+  scroll-behavior: auto;
   scroll-snap-type: x proximity;
   scrollbar-width: none;
   position: relative;

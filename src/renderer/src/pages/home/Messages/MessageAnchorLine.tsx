@@ -339,11 +339,14 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
       return
     }
 
-    scheduleActiveAnchorUpdate()
+    const initialUpdateTimer = window.setTimeout(() => {
+      scheduleActiveAnchorUpdate()
+    }, 80)
     messagesContainer.addEventListener('scroll', scheduleActiveAnchorUpdate, { passive: true })
     window.addEventListener('resize', scheduleActiveAnchorUpdate)
 
     return () => {
+      window.clearTimeout(initialUpdateTimer)
       messagesContainer.removeEventListener('scroll', scheduleActiveAnchorUpdate)
       window.removeEventListener('resize', scheduleActiveAnchorUpdate)
       if (updateRafIdRef.current !== null) {

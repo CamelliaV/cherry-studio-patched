@@ -29,7 +29,7 @@ import { updateCodeBlock } from '@renderer/utils/markdown'
 import { getMainTextContent } from '@renderer/utils/messageUtils/find'
 import { isTextLikeBlock } from '@renderer/utils/messageUtils/is'
 import { last } from 'lodash'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import MessageAnchorLine from './MessageAnchorLine'
@@ -49,6 +49,10 @@ interface MessagesProps {
 }
 
 const logger = loggerService.withContext('Messages')
+type EstimatedTokenPayload = {
+  tokensCount: number
+  contextCount: ReturnType<typeof getContextCount>
+}
 
 const Messages: React.FC<MessagesProps> = ({
   assistant,
@@ -65,7 +69,6 @@ const Messages: React.FC<MessagesProps> = ({
     undefined,
     isActive
   )
-  const [displayMessages, setDisplayMessages] = useState<Message[]>([])
   const [isProcessingContext, setIsProcessingContext] = useState(false)
 
   const { addTopic } = useAssistant(assistant.id)
@@ -75,14 +78,39 @@ const Messages: React.FC<MessagesProps> = ({
   const messages = useTopicMessages(topic.id)
   const { clearTopicMessages, deleteMessage, createTopicBranch } = useMessageOperations(topic)
 
-  const { isMultiSelectMode, handleSelectMessage } = useChatContext(topic, isActive)
+  const { isMultiSelectMode, handleSelectMessage } = useChatContext(topic)
 
   const messageElements = useRef<Map<string, HTMLElement>>(new Map())
   const messagesRef = useRef<Message[]>(messages)
+  const latestEstimateRef = useRef<{ key: string; payload: EstimatedTokenPayload } | null>(null)
 
   useEffect(() => {
     messagesRef.current = messages
   }, [messages])
+
+  const lastMessage = messages[messages.length - 1]
+  const tokenEstimateCacheKey = useMemo(
+    () =>
+      [
+        topic.id,
+        assistant.id,
+        assistant.prompt || '',
+        assistant.settings?.contextCount ?? '',
+        messages.length,
+        lastMessage?.id || '',
+        lastMessage?.updatedAt || lastMessage?.createdAt || ''
+      ].join('|'),
+    [
+      assistant.id,
+      assistant.prompt,
+      assistant.settings?.contextCount,
+      lastMessage?.createdAt,
+      lastMessage?.id,
+      lastMessage?.updatedAt,
+      messages.length,
+      topic.id
+    ]
+  )
 
   const registerMessageElement = useCallback((id: string, element: HTMLElement | null) => {
     if (element) {
@@ -91,10 +119,7 @@ const Messages: React.FC<MessagesProps> = ({
       messageElements.current.delete(id)
     }
   }, [])
-
-  useEffect(() => {
-    setDisplayMessages([...messages].reverse())
-  }, [messages])
+  const displayMessages = useMemo(() => [...messages].reverse(), [messages])
 
   // NOTE: 如果设置为平滑滚动会导致滚动条无法跟随生成的新消息保持在底部位置
   const scrollToBottom = useCallback(() => {
@@ -115,7 +140,6 @@ const Messages: React.FC<MessagesProps> = ({
       }
 
       await clearTopicMessages()
-      setDisplayMessages([])
     },
     [clearTopicMessages, topic.id]
   )
@@ -252,13 +276,60 @@ const Messages: React.FC<MessagesProps> = ({
       return
     }
 
-    runAsyncFunction(async () => {
-      EventEmitter.emit(EVENT_NAMES.ESTIMATED_TOKEN_COUNT, {
-        tokensCount: await estimateHistoryTokens(assistant, messages),
-        contextCount: getContextCount(assistant, messages)
+    if (latestEstimateRef.current?.key === tokenEstimateCacheKey) {
+      EventEmitter.emit(EVENT_NAMES.ESTIMATED_TOKEN_COUNT, latestEstimateRef.current.payload)
+      onFirstUpdate?.()
+      return
+    }
+
+    let cancelled = false
+    let idleCallbackId: number | null = null
+    let estimationTimer: number | null = null
+
+    const runEstimation = () => {
+      runAsyncFunction(async () => {
+        const payload: EstimatedTokenPayload = {
+          tokensCount: await estimateHistoryTokens(assistant, messages),
+          contextCount: getContextCount(assistant, messages)
+        }
+        if (cancelled) {
+          return
+        }
+        latestEstimateRef.current = {
+          key: tokenEstimateCacheKey,
+          payload
+        }
+        EventEmitter.emit(EVENT_NAMES.ESTIMATED_TOKEN_COUNT, payload)
+      }).finally(() => {
+        if (!cancelled) {
+          onFirstUpdate?.()
+        }
       })
-    }).then(() => onFirstUpdate?.())
-  }, [assistant, isActive, messages, onFirstUpdate])
+    }
+
+    if (typeof window.requestIdleCallback === 'function') {
+      idleCallbackId = window.requestIdleCallback(
+        () => {
+          if (!cancelled) {
+            runEstimation()
+          }
+        },
+        { timeout: 280 }
+      )
+    } else {
+      estimationTimer = window.setTimeout(runEstimation, 50)
+    }
+
+    return () => {
+      cancelled = true
+      if (idleCallbackId !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleCallbackId)
+      }
+      if (estimationTimer !== null) {
+        window.clearTimeout(estimationTimer)
+      }
+    }
+  }, [assistant, isActive, messages, onFirstUpdate, tokenEstimateCacheKey])
 
   useShortcut(
     'copy_last_message',
@@ -293,16 +364,15 @@ const Messages: React.FC<MessagesProps> = ({
 
   // NOTE: 因为displayMessages是倒序的，所以得到的groupedMessages每个group内部也是倒序的，需要再倒一遍
   const groupedMessages = useMemo(() => {
-    const grouped = Object.entries(getGroupedMessages(displayMessages))
-    const newGrouped: {
-      [key: string]: (Message & {
-        index: number
-      })[]
-    } = {}
-    grouped.forEach(([key, group]) => {
-      newGrouped[key] = group.toReversed()
-    })
-    return Object.entries(newGrouped)
+    return Object.entries(getGroupedMessages(displayMessages)).map(
+      ([key, group]) =>
+        [key, group.toReversed()] as [
+          string,
+          (Message & {
+            index: number
+          })[]
+        ]
+    )
   }, [displayMessages])
 
   const showMessageAnchor = true
@@ -352,4 +422,16 @@ const Messages: React.FC<MessagesProps> = ({
   )
 }
 
-export default Messages
+const areMessagesPropsEqual = (prev: MessagesProps, next: MessagesProps) => {
+  return (
+    prev.assistant.id === next.assistant.id &&
+    prev.assistant.prompt === next.assistant.prompt &&
+    prev.assistant.model?.id === next.assistant.model?.id &&
+    prev.topic.id === next.topic.id &&
+    prev.topic.updatedAt === next.topic.updatedAt &&
+    prev.isActive === next.isActive &&
+    prev.containerId === next.containerId
+  )
+}
+
+export default memo(Messages, areMessagesPropsEqual)

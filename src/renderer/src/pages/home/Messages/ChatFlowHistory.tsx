@@ -10,20 +10,245 @@ import { useSettings } from '@renderer/hooks/useSettings'
 import { useTimer } from '@renderer/hooks/useTimer'
 import { EVENT_NAMES, EventEmitter } from '@renderer/services/EventService'
 import type { RootState } from '@renderer/store'
-import { selectMessagesForTopic } from '@renderer/store/newMessage'
+import { makeSelectMessagesForTopic } from '@renderer/store/newMessage'
 import type { Model } from '@renderer/types'
+import type { Message } from '@renderer/types/newMessage'
+import { MessageBlockType } from '@renderer/types/newMessage'
 import { isEmoji } from '@renderer/utils'
-import { getMainTextContent } from '@renderer/utils/messageUtils/find'
 import type { Edge, Node, NodeTypes } from '@xyflow/react'
 import { Controls, Handle, MiniMap, ReactFlow, ReactFlowProvider } from '@xyflow/react'
-import { Position, useEdgesState, useNodesState } from '@xyflow/react'
-import { Avatar, Spin, Tooltip } from 'antd'
-import { isEqual } from 'lodash'
+import { Position } from '@xyflow/react'
+import { Avatar, Tooltip } from 'antd'
 import type { FC } from 'react'
-import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSelector } from 'react-redux'
 import styled from 'styled-components'
+
+const LAYOUT = {
+  verticalGap: 200,
+  horizontalGap: 350,
+  baseX: 150
+} as const
+
+type FlowMessage = {
+  id: string
+  role: 'user' | 'assistant'
+  createdAtMs: number
+  content: string
+  model?: Model
+}
+
+type FlowData = {
+  nodes: FlowNode[]
+  edges: FlowEdge[]
+}
+
+type FlowNodeData = FlowUserNodeData | FlowAssistantNodeData
+
+type FlowUserNodeData = {
+  type: 'user'
+  userName: string
+  content: string
+  messageId: string
+  userAvatar: string | null
+}
+
+type FlowAssistantNodeData = {
+  type: 'assistant'
+  model: string
+  content: string
+  messageId: string
+  modelId: string
+  modelInfo?: Model
+}
+
+type FlowNode = Node<FlowNodeData>
+type FlowEdge = Edge
+
+interface ChatFlowHistoryProps {
+  conversationId?: string
+}
+
+const toTimestamp = (time: string): number => {
+  const parsed = Date.parse(time)
+  return Number.isNaN(parsed) ? 0 : parsed
+}
+
+const getMainTextContentFromBlocks = (
+  message: Message,
+  blockEntities: RootState['messageBlocks']['entities']
+): string => {
+  if (!message.blocks || message.blocks.length === 0) {
+    return ''
+  }
+
+  const contents: string[] = []
+  for (const blockId of message.blocks) {
+    const block = blockEntities[blockId]
+    if (block && block.type === MessageBlockType.MAIN_TEXT) {
+      contents.push(block.content)
+    }
+  }
+
+  return contents.join('\n\n')
+}
+
+const getAssistantNodeData = (message: FlowMessage, t: (key: string) => string): FlowAssistantNodeData => ({
+  type: 'assistant',
+  model: message.model?.name || t('chat.history.assistant_node'),
+  content: message.content,
+  messageId: message.id,
+  modelId: message.model?.id || '',
+  modelInfo: message.model
+})
+
+const buildConversationFlowData = (
+  topicId: string | undefined,
+  messages: FlowMessage[],
+  userName: string,
+  userAvatar: string | null,
+  t: (key: string) => string
+): FlowData => {
+  if (!topicId || messages.length === 0) {
+    return { nodes: [], edges: [] }
+  }
+
+  const userMessages = messages.filter((msg) => msg.role === 'user').sort((a, b) => a.createdAtMs - b.createdAtMs)
+  const assistantMessages = messages
+    .filter((msg) => msg.role === 'assistant')
+    .sort((a, b) => a.createdAtMs - b.createdAtMs)
+
+  if (userMessages.length === 0 && assistantMessages.length === 0) {
+    return { nodes: [], edges: [] }
+  }
+
+  const nodes: FlowNode[] = []
+  const edges: FlowEdge[] = []
+  const assistantsByUser = new Map<string, FlowMessage[]>()
+  const assignedAssistantIds = new Set<string>()
+
+  // Single linear pass: assign assistant messages into user-time buckets.
+  let assistantCursor = 0
+  for (let userIndex = 0; userIndex < userMessages.length; userIndex++) {
+    const user = userMessages[userIndex]
+    const nextUserTime =
+      userIndex === userMessages.length - 1 ? Number.POSITIVE_INFINITY : userMessages[userIndex + 1].createdAtMs
+    const relatedAssistants: FlowMessage[] = []
+
+    while (
+      assistantCursor < assistantMessages.length &&
+      assistantMessages[assistantCursor].createdAtMs <= user.createdAtMs
+    ) {
+      assistantCursor++
+    }
+
+    while (
+      assistantCursor < assistantMessages.length &&
+      assistantMessages[assistantCursor].createdAtMs < nextUserTime
+    ) {
+      const assistant = assistantMessages[assistantCursor]
+      relatedAssistants.push(assistant)
+      assignedAssistantIds.add(assistant.id)
+      assistantCursor++
+    }
+
+    assistantsByUser.set(user.id, relatedAssistants)
+  }
+
+  for (let userIndex = 0; userIndex < userMessages.length; userIndex++) {
+    const user = userMessages[userIndex]
+    const userNodeId = `user-${user.id}`
+    const userY = userIndex * LAYOUT.verticalGap * 2
+    const relatedAssistants = assistantsByUser.get(user.id) || []
+
+    nodes.push({
+      id: userNodeId,
+      type: 'custom',
+      data: {
+        type: 'user',
+        userName: userName || t('chat.history.user_node'),
+        content: user.content,
+        messageId: user.id,
+        userAvatar
+      },
+      position: { x: LAYOUT.baseX, y: userY },
+      sourcePosition: Position.Bottom,
+      targetPosition: Position.Top
+    })
+
+    const hasMultiResponses = relatedAssistants.length > 1
+    relatedAssistants.forEach((assistant, assistantIndex) => {
+      const assistantNodeId = `assistant-${assistant.id}`
+      const assistantX = LAYOUT.baseX + (hasMultiResponses ? LAYOUT.horizontalGap * assistantIndex : 0)
+
+      nodes.push({
+        id: assistantNodeId,
+        type: 'custom',
+        data: getAssistantNodeData(assistant, t),
+        position: { x: assistantX, y: userY + LAYOUT.verticalGap },
+        sourcePosition: Position.Bottom,
+        targetPosition: Position.Top
+      })
+
+      edges.push({
+        id: `edge-${userNodeId}-to-${assistantNodeId}`,
+        source: userNodeId,
+        target: assistantNodeId
+      })
+    })
+
+    if (userIndex > 0) {
+      const previousUser = userMessages[userIndex - 1]
+      const previousUserNodeId = `user-${previousUser.id}`
+      const previousAssistants = assistantsByUser.get(previousUser.id) || []
+
+      if (previousAssistants.length > 0) {
+        previousAssistants.forEach((assistant) => {
+          edges.push({
+            id: `edge-assistant-${assistant.id}-to-${userNodeId}`,
+            source: `assistant-${assistant.id}`,
+            target: userNodeId
+          })
+        })
+      } else {
+        edges.push({
+          id: `edge-${previousUserNodeId}-to-${userNodeId}`,
+          source: previousUserNodeId,
+          target: userNodeId
+        })
+      }
+    }
+  }
+
+  const orphanAssistants = assistantMessages.filter((assistant) => !assignedAssistantIds.has(assistant.id))
+  if (orphanAssistants.length > 0) {
+    const minY = nodes.length > 0 ? Math.min(...nodes.map((node) => node.position.y)) : 0
+    const orphanStartY = minY - LAYOUT.verticalGap * 2
+
+    orphanAssistants.forEach((assistant, index) => {
+      const orphanNodeId = `orphan-assistant-${assistant.id}`
+      nodes.push({
+        id: orphanNodeId,
+        type: 'custom',
+        data: getAssistantNodeData(assistant, t),
+        position: { x: LAYOUT.baseX, y: orphanStartY - index * LAYOUT.verticalGap },
+        sourcePosition: Position.Bottom,
+        targetPosition: Position.Top
+      })
+
+      if (index > 0) {
+        edges.push({
+          id: `edge-orphan-assistant-${orphanAssistants[index - 1].id}-to-${orphanNodeId}`,
+          source: `orphan-assistant-${orphanAssistants[index - 1].id}`,
+          target: orphanNodeId
+        })
+      }
+    })
+  }
+
+  return { nodes, edges }
+}
 
 // 定义Tooltip相关样式组件
 const TooltipContent = styled.div`
@@ -50,87 +275,68 @@ const TooltipFooter = styled.div`
   font-style: italic;
 `
 
-// 自定义节点组件
-// FIXME: no any plz...
-const CustomNode: FC<{ data: any }> = ({ data }) => {
+const CustomNode: FC<{ data: FlowNodeData }> = ({ data }) => {
   const { t } = useTranslation()
   const { setTimeoutTimer } = useTimer()
 
-  const nodeType = data.type
-  let borderColor = 'var(--color-border)'
-  let title = ''
-  let backgroundColor = 'var(--bg-color)'
-  let gradientColor = 'rgba(0, 0, 0, 0.03)'
-  let avatar: React.ReactNode | null = null
+  const isUser = data.type === 'user'
+  const title = isUser ? data.userName || t('chat.history.user_node') : data.model || t('chat.history.assistant_node')
+  const borderColor = isUser ? 'var(--color-icon)' : 'var(--color-primary)'
+  const backgroundColor = isUser ? 'rgba(var(--color-info-rgb), 0.03)' : 'rgba(var(--color-primary-rgb), 0.03)'
+  const gradientColor = isUser ? 'rgba(var(--color-info-rgb), 0.08)' : 'rgba(var(--color-primary-rgb), 0.08)'
 
-  // 根据消息类型设置不同的样式和图标
-  if (nodeType === 'user') {
-    borderColor = 'var(--color-icon)'
-    backgroundColor = 'rgba(var(--color-info-rgb), 0.03)'
-    gradientColor = 'rgba(var(--color-info-rgb), 0.08)'
-    title = data.userName || t('chat.history.user_node')
-
-    // 用户头像
-    if (data.userAvatar) {
-      if (isEmoji(data.userAvatar)) {
-        avatar = <EmojiAvatar size={32}>{data.userAvatar}</EmojiAvatar>
-      } else {
-        avatar = <Avatar src={data.userAvatar} alt={title} />
+  const avatar = (() => {
+    if (isUser) {
+      if (data.userAvatar) {
+        if (isEmoji(data.userAvatar)) {
+          return <EmojiAvatar size={32}>{data.userAvatar}</EmojiAvatar>
+        }
+        return <Avatar src={data.userAvatar} alt={title} />
       }
-    } else {
-      avatar = <Avatar icon={<UserOutlined />} style={{ backgroundColor: 'var(--color-info)' }} />
-    }
-  } else if (nodeType === 'assistant') {
-    borderColor = 'var(--color-primary)'
-    backgroundColor = 'rgba(var(--color-primary-rgb), 0.03)'
-    gradientColor = 'rgba(var(--color-primary-rgb), 0.08)'
-    title = `${data.model || t('chat.history.assistant_node')}`
 
-    // 模型头像
+      return <Avatar icon={<UserOutlined />} style={{ backgroundColor: 'var(--color-info)' }} />
+    }
+
     if (data.modelInfo) {
-      avatar = <ModelAvatar model={data.modelInfo} size={32} />
-    } else if (data.modelId) {
+      return <ModelAvatar model={data.modelInfo} size={32} />
+    }
+
+    if (data.modelId) {
       const modelLogo = getModelLogo(data.modelInfo) ?? getModelLogoById(data.modelId)
-      avatar = (
+      return (
         <Avatar
           src={modelLogo}
           icon={!modelLogo ? <RobotOutlined /> : undefined}
           style={{ backgroundColor: 'var(--color-primary)' }}
         />
       )
-    } else {
-      avatar = <Avatar icon={<RobotOutlined />} style={{ backgroundColor: 'var(--color-primary)' }} />
     }
-  }
 
-  // 处理节点点击事件，滚动到对应消息
+    return <Avatar icon={<RobotOutlined />} style={{ backgroundColor: 'var(--color-primary)' }} />
+  })()
+
   const handleNodeClick = () => {
-    if (data.messageId) {
-      // 创建一个自定义事件来定位消息并切换标签
-      const customEvent = new CustomEvent('flow-navigate-to-message', {
-        detail: {
-          messageId: data.messageId,
-          modelId: data.modelId,
-          modelName: data.model,
-          nodeType: nodeType
-        },
-        bubbles: true
-      })
+    const customEvent = new CustomEvent('flow-navigate-to-message', {
+      detail: {
+        messageId: data.messageId,
+        modelId: data.type === 'assistant' ? data.modelId : undefined,
+        modelName: data.type === 'assistant' ? data.model : undefined,
+        nodeType: data.type
+      },
+      bubbles: true
+    })
 
-      // 让监听器处理标签切换
-      document.dispatchEvent(customEvent)
+    document.dispatchEvent(customEvent)
 
-      setTimeoutTimer(
-        'handleNodeClick',
-        () => {
-          EventEmitter.emit(EVENT_NAMES.LOCATE_MESSAGE + ':' + data.messageId)
-        },
-        250
-      )
-    }
+    setTimeoutTimer(
+      'handleNodeClick',
+      () => {
+        EventEmitter.emit(EVENT_NAMES.LOCATE_MESSAGE + ':' + data.messageId)
+      },
+      250
+    )
   }
 
-  // 隐藏连接点的通用样式
   const handleStyle = {
     opacity: 0,
     width: '12px',
@@ -176,315 +382,57 @@ const CustomNode: FC<{ data: any }> = ({ data }) => {
   )
 }
 
-// 创建自定义节点类型
 const nodeTypes: NodeTypes = { custom: CustomNode }
 
-interface ChatFlowHistoryProps {
-  conversationId?: string
-}
-
-// 定义节点和边的类型
-// FIXME: No any plz
-type FlowNode = Node<any>
-type FlowEdge = Edge<any>
-
-// 统一的边样式
-const commonEdgeStyle = {
-  stroke: 'var(--color-border)',
-  strokeDasharray: '4,4',
-  strokeWidth: 2
-}
-
-// 统一的边配置
-const defaultEdgeOptions = {
-  animated: true,
-  style: commonEdgeStyle,
-  type: 'step',
-  markerEnd: undefined,
-  zIndex: 5
+const getMiniMapNodeColor = (node: Node): string => {
+  const nodeData = node.data as FlowNodeData | undefined
+  return nodeData?.type === 'user' ? 'var(--color-info)' : 'var(--color-primary)'
 }
 
 const ChatFlowHistory: FC<ChatFlowHistoryProps> = ({ conversationId }) => {
   const { t } = useTranslation()
-  // FIXME: no any plz
-  const [nodes, setNodes, onNodesChange] = useNodesState<any>([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState<any>([])
-  const [loading, setLoading] = useState(true)
   const { userName } = useSettings()
   const { settedTheme } = useTheme()
-
+  const userAvatar = useAvatar()
   const topicId = conversationId
 
-  // 只在消息实际内容变化时更新，而不是属性变化（如foldSelected）
-  const messages = useSelector(
-    (state: RootState) => selectMessagesForTopic(state, topicId || ''),
-    (prev, next) => {
-      // 只比较消息的关键属性，忽略展示相关的属性（如foldSelected）
-      if (prev.length !== next.length) return false
+  const selectMessagesForCurrentTopic = useMemo(makeSelectMessagesForTopic, [])
+  const messages = useSelector((state: RootState) => selectMessagesForCurrentTopic(state, topicId || ''))
+  const blockEntities = useSelector((state: RootState) => state.messageBlocks.entities)
 
-      // 比较每条消息的内容和关键属性，忽略UI状态相关属性
-      return prev.every((prevMsg, index) => {
-        const nextMsg = next[index]
-        const prevMsgContent = getMainTextContent(prevMsg)
-        const nextMsgContent = getMainTextContent(nextMsg)
-        return (
-          prevMsg.id === nextMsg.id &&
-          prevMsgContent === nextMsgContent &&
-          prevMsg.role === nextMsg.role &&
-          prevMsg.createdAt === nextMsg.createdAt &&
-          prevMsg.askId === nextMsg.askId &&
-          isEqual(prevMsg.model, nextMsg.model)
-        )
-      })
-    }
-  )
+  const flowMessages = useMemo<FlowMessage[]>(() => {
+    const next: FlowMessage[] = []
 
-  // 获取用户头像
-  const userAvatar = useAvatar()
-
-  // 消息过滤
-  const { userMessages, assistantMessages } = useMemo(() => {
-    const userMsgs = messages.filter((msg) => msg.role === 'user')
-    const assistantMsgs = messages.filter((msg) => msg.role === 'assistant')
-    return { userMessages: userMsgs, assistantMessages: assistantMsgs }
-  }, [messages])
-
-  const buildConversationFlowData = useCallback(() => {
-    if (!topicId || !messages.length) return { nodes: [], edges: [] }
-
-    // 创建节点和边
-    const flowNodes: FlowNode[] = []
-    const flowEdges: FlowEdge[] = []
-
-    // 布局参数
-    const verticalGap = 200
-    const horizontalGap = 350
-    const baseX = 150
-
-    // 如果没有任何消息可以显示，返回空结果
-    if (userMessages.length === 0 && assistantMessages.length === 0) {
-      return { nodes: [], edges: [] }
-    }
-
-    // 为所有用户消息创建节点
-    userMessages.forEach((message, index) => {
-      const nodeId = `user-${message.id}`
-      const yPosition = index * verticalGap * 2
-
-      // 获取用户名
-      const userNameValue = userName || t('chat.history.user_node')
-
-      // 获取用户头像
-      const msgUserAvatar = userAvatar || null
-
-      flowNodes.push({
-        id: nodeId,
-        type: 'custom',
-        data: {
-          userName: userNameValue,
-          content: getMainTextContent(message),
-          type: 'user',
-          messageId: message.id,
-          userAvatar: msgUserAvatar
-        },
-        position: { x: baseX, y: yPosition },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top
-      })
-
-      // 找到用户消息之后的助手回复
-      const userMsgTime = new Date(message.createdAt).getTime()
-      const relatedAssistantMsgs = assistantMessages.filter((aMsg) => {
-        const aMsgTime = new Date(aMsg.createdAt).getTime()
-        return (
-          aMsgTime > userMsgTime &&
-          (index === userMessages.length - 1 || aMsgTime < new Date(userMessages[index + 1].createdAt).getTime())
-        )
-      })
-
-      // 为相关的助手消息创建节点
-      relatedAssistantMsgs.forEach((aMsg, aIndex) => {
-        const assistantNodeId = `assistant-${aMsg.id}`
-        const isMultipleResponses = relatedAssistantMsgs.length > 1
-        const assistantX = baseX + (isMultipleResponses ? horizontalGap * aIndex : 0)
-        const assistantY = yPosition + verticalGap
-
-        // 根据位置确定连接点位置
-        let sourcePos = Position.Bottom // 默认向下输出
-        let targetPos = Position.Top // 默认从上方输入
-
-        // 横向排列多个助手消息时调整连接点
-        // 注意：现在所有助手节点都直接连接到用户节点，而不是相互连接
-        if (isMultipleResponses) {
-          // 所有助手节点都使用顶部作为输入点(从用户节点)
-          targetPos = Position.Top
-
-          // 所有助手节点都使用底部作为输出点(到下一个用户节点)
-          sourcePos = Position.Bottom
-        }
-
-        const aMsgAny = aMsg as any
-
-        // 获取模型名称
-        const modelName = (aMsgAny.model && aMsgAny.model.name) || t('chat.history.assistant_node')
-
-        // 获取模型ID
-        const modelId = (aMsgAny.model && aMsgAny.model.id) || ''
-
-        // 完整的模型信息
-        const modelInfo = aMsgAny.model as Model | undefined
-
-        flowNodes.push({
-          id: assistantNodeId,
-          type: 'custom',
-          data: {
-            model: modelName,
-            content: getMainTextContent(aMsg),
-            type: 'assistant',
-            messageId: aMsg.id,
-            modelId: modelId,
-            modelInfo
-          },
-          position: { x: assistantX, y: assistantY },
-          sourcePosition: sourcePos,
-          targetPosition: targetPos
-        })
-
-        // 连接消息 - 将每个助手节点直接连接到用户节点
-        if (aIndex === 0) {
-          // 连接用户消息到第一个助手回复
-          flowEdges.push({
-            id: `edge-${nodeId}-to-${assistantNodeId}`,
-            source: nodeId,
-            target: assistantNodeId
-          })
-        } else {
-          // 直接连接用户消息到所有其他助手回复
-          flowEdges.push({
-            id: `edge-${nodeId}-to-${assistantNodeId}`,
-            source: nodeId,
-            target: assistantNodeId
-          })
-        }
-      })
-
-      // 连接相邻的用户消息
-      if (index > 0) {
-        const prevUserNodeId = `user-${userMessages[index - 1].id}`
-        const prevUserTime = new Date(userMessages[index - 1].createdAt).getTime()
-
-        // 查找前一个用户消息的所有助手回复
-        const prevAssistantMsgs = assistantMessages.filter((aMsg) => {
-          const aMsgTime = new Date(aMsg.createdAt).getTime()
-          return aMsgTime > prevUserTime && aMsgTime < userMsgTime
-        })
-
-        if (prevAssistantMsgs.length > 0) {
-          // 所有前一个用户的助手消息都连接到当前用户消息
-          prevAssistantMsgs.forEach((aMsg) => {
-            const assistantId = `assistant-${aMsg.id}`
-            flowEdges.push({
-              id: `edge-${assistantId}-to-${nodeId}`,
-              source: assistantId,
-              target: nodeId
-            })
-          })
-        } else {
-          // 如果没有助手消息，直接连接两个用户消息
-          flowEdges.push({
-            id: `edge-${prevUserNodeId}-to-${nodeId}`,
-            source: prevUserNodeId,
-            target: nodeId
-          })
-        }
+    messages.forEach((message: Message) => {
+      if (message.role !== 'user' && message.role !== 'assistant') {
+        return
       }
+
+      next.push({
+        id: message.id,
+        role: message.role,
+        createdAtMs: toTimestamp(message.createdAt),
+        content: getMainTextContentFromBlocks(message, blockEntities),
+        model: message.model
+      })
     })
 
-    // 处理孤立的助手消息（没有对应的用户消息）
-    const orphanAssistantMsgs = assistantMessages.filter(
-      (aMsg) => !flowNodes.some((node) => node.id === `assistant-${aMsg.id}`)
-    )
+    return next
+  }, [blockEntities, messages])
 
-    if (orphanAssistantMsgs.length > 0) {
-      // 在图表顶部添加这些孤立消息
-      const startY = flowNodes.length > 0 ? Math.min(...flowNodes.map((node) => node.position.y)) - verticalGap * 2 : 0
-
-      orphanAssistantMsgs.forEach((aMsg, index) => {
-        const assistantNodeId = `orphan-assistant-${aMsg.id}`
-
-        // 获取模型数据
-        // FIXME: No any plz
-        const aMsgAny = aMsg as any
-
-        // 获取模型名称
-        const modelName = (aMsgAny.model && aMsgAny.model.name) || t('chat.history.assistant_node')
-
-        // 获取模型ID
-        const modelId = (aMsgAny.model && aMsgAny.model.id) || ''
-
-        // 完整的模型信息
-        const modelInfo = aMsgAny.model as Model | undefined
-
-        flowNodes.push({
-          id: assistantNodeId,
-          type: 'custom',
-          data: {
-            model: modelName,
-            content: getMainTextContent(aMsg),
-            type: 'assistant',
-            messageId: aMsg.id,
-            modelId: modelId,
-            modelInfo
-          },
-          position: { x: baseX, y: startY - index * verticalGap },
-          sourcePosition: Position.Bottom,
-          targetPosition: Position.Top
-        })
-
-        // 连接相邻的孤立消息
-        if (index > 0) {
-          const prevNodeId = `orphan-assistant-${orphanAssistantMsgs[index - 1].id}`
-          flowEdges.push({
-            id: `edge-${prevNodeId}-to-${assistantNodeId}`,
-            source: prevNodeId,
-            target: assistantNodeId
-          })
-        }
-      })
-    }
-
-    return { nodes: flowNodes, edges: flowEdges }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topicId, messages, userMessages, assistantMessages, t])
-
-  useEffect(() => {
-    setLoading(true)
-    const timer = setTimeout(() => {
-      const { nodes: flowNodes, edges: flowEdges } = buildConversationFlowData()
-      setNodes([...flowNodes])
-      setEdges([...flowEdges])
-      setLoading(false)
-    }, 500)
-
-    return () => {
-      clearTimeout(timer)
-    }
-  }, [buildConversationFlowData, setNodes, setEdges])
+  const flowData = useMemo(
+    () => buildConversationFlowData(topicId, flowMessages, userName, userAvatar || null, t),
+    [flowMessages, topicId, t, userAvatar, userName]
+  )
 
   return (
     <FlowContainer>
-      {loading ? (
-        <LoadingContainer>
-          <Spin size="large" />
-        </LoadingContainer>
-      ) : nodes.length > 0 ? (
+      {flowData.nodes.length > 0 ? (
         <ReactFlowProvider>
           <div style={{ width: '100%', height: '100%' }}>
             <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
+              nodes={flowData.nodes}
+              edges={flowData.edges}
               nodeTypes={nodeTypes}
               nodesDraggable={false}
               nodesConnectable={false}
@@ -510,12 +458,7 @@ const ChatFlowHistory: FC<ChatFlowHistoryProps> = ({ conversationId }) => {
               className="react-flow-container"
               colorMode={settedTheme}>
               <Controls showInteractive={false} />
-              <MiniMap
-                nodeStrokeWidth={3}
-                zoomable
-                pannable
-                nodeColor={(node) => (node.data.type === 'user' ? 'var(--color-info)' : 'var(--color-primary)')}
-              />
+              <MiniMap nodeStrokeWidth={3} zoomable pannable nodeColor={getMiniMapNodeColor} />
             </ReactFlow>
           </div>
         </ReactFlowProvider>
@@ -528,20 +471,27 @@ const ChatFlowHistory: FC<ChatFlowHistoryProps> = ({ conversationId }) => {
   )
 }
 
+// 统一的边样式
+const commonEdgeStyle = {
+  stroke: 'var(--color-border)',
+  strokeDasharray: '4,4',
+  strokeWidth: 2
+}
+
+// 统一的边配置
+const defaultEdgeOptions = {
+  animated: true,
+  style: commonEdgeStyle,
+  type: 'step',
+  markerEnd: undefined,
+  zIndex: 5
+}
+
 // 样式组件定义
 const FlowContainer = styled.div`
   width: 100%;
   height: 100%;
   min-height: 500px;
-`
-
-const LoadingContainer = styled.div`
-  width: 100%;
-  height: 100%;
-  min-height: 500px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
 `
 
 const EmptyContainer = styled.div`
@@ -582,7 +532,6 @@ const CustomNodeContainer = styled.div`
     filter: brightness(1.02);
   }
 
-  /* 添加点击动画效果 */
   &:active {
     transform: scale(0.98);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -639,5 +588,4 @@ const NodeContent = styled.div`
   padding: 3px;
 `
 
-// 确保组件使用React.memo包装以减少不必要的重渲染
 export default memo(ChatFlowHistory)

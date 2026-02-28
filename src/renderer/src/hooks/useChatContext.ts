@@ -12,7 +12,7 @@ import { useDispatch, useSelector, useStore } from 'react-redux'
 
 const logger = loggerService.withContext('useChatContext')
 
-export const useChatContext = (activeTopic: Topic, enabled: boolean = true) => {
+export const useChatContext = (activeTopic: Topic, enabled: boolean = false) => {
   const { t } = useTranslation()
   const dispatch = useDispatch()
   const store = useStore<RootState>()

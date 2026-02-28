@@ -14,7 +14,7 @@ import { EVENT_NAMES, EventEmitter } from '@renderer/services/EventService'
 import { pauseTrace } from '@renderer/services/SpanManagerService'
 import { estimateUserPromptUsage } from '@renderer/services/TokenService'
 import { useAppDispatch, useAppSelector } from '@renderer/store'
-import { newMessagesActions, selectMessagesForTopic } from '@renderer/store/newMessage'
+import { makeSelectMessagesForTopic, newMessagesActions } from '@renderer/store/newMessage'
 import { sendMessage as dispatchSendMessage } from '@renderer/store/thunk/messageThunk'
 import type { Assistant, Message } from '@renderer/types'
 import type { FileMetadata } from '@renderer/types'
@@ -185,7 +185,8 @@ const AgentSessionInputbarInner: FC<InnerProps> = ({ assistant, agentId, session
   const { setTimeoutTimer } = useTimer()
   const dispatch = useAppDispatch()
   const sessionTopicId = buildAgentSessionTopicId(sessionId)
-  const topicMessages = useAppSelector((state) => selectMessagesForTopic(state, sessionTopicId))
+  const selectMessagesForSessionTopic = useMemo(makeSelectMessagesForTopic, [])
+  const topicMessages = useAppSelector((state) => selectMessagesForSessionTopic(state, sessionTopicId))
   const loading = useAppSelector((state) => selectNewTopicLoading(state, sessionTopicId))
 
   // Calculate vision and image generation support

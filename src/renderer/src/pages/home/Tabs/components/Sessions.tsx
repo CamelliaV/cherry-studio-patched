@@ -2,7 +2,7 @@ import { DynamicVirtualList } from '@renderer/components/VirtualList'
 import { useCreateDefaultSession } from '@renderer/hooks/agents/useCreateDefaultSession'
 import { useSessions } from '@renderer/hooks/agents/useSessions'
 import { useRuntime } from '@renderer/hooks/useRuntime'
-import { useAppDispatch } from '@renderer/store'
+import { useAppDispatch, useAppSelector } from '@renderer/store'
 import { newMessagesActions } from '@renderer/store/newMessage'
 import {
   setActiveSessionIdAction,
@@ -61,6 +61,9 @@ const Sessions: React.FC<SessionsProps> = ({ agentId }) => {
   )
 
   const activeSessionId = activeSessionIdMap[agentId]
+  const activeSessionTopicFulfilled = useAppSelector((state) =>
+    activeSessionId ? !!state.messages.fulfilledByTopic[buildAgentSessionTopicId(activeSessionId)] : false
+  )
 
   useEffect(() => {
     if (!isLoading && sessions.length > 0 && !activeSessionId) {
@@ -69,15 +72,17 @@ const Sessions: React.FC<SessionsProps> = ({ agentId }) => {
   }, [isLoading, sessions, activeSessionId, agentId, setActiveSessionId])
 
   useEffect(() => {
-    if (activeSessionId) {
-      dispatch(
-        newMessagesActions.setTopicFulfilled({
-          topicId: buildAgentSessionTopicId(activeSessionId),
-          fulfilled: false
-        })
-      )
+    if (!activeSessionId || !activeSessionTopicFulfilled) {
+      return
     }
-  }, [activeSessionId, dispatch])
+
+    dispatch(
+      newMessagesActions.setTopicFulfilled({
+        topicId: buildAgentSessionTopicId(activeSessionId),
+        fulfilled: false
+      })
+    )
+  }, [activeSessionId, activeSessionTopicFulfilled, dispatch])
 
   if (isLoading) {
     return (

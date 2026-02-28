@@ -109,11 +109,15 @@ export const Topics: React.FC<Props> = ({ assistant: _assistant, activeTopic, se
 
   const isPending = useCallback((topicId: string) => topicLoadingQuery[topicId], [topicLoadingQuery])
   const isFulfilled = useCallback((topicId: string) => topicFulfilledQuery[topicId], [topicFulfilledQuery])
+  const activeTopicIsFulfilled = !!topicFulfilledQuery[activeTopic.id]
   const dispatch = useDispatch()
 
   useEffect(() => {
+    if (!activeTopicIsFulfilled) {
+      return
+    }
     dispatch(newMessagesActions.setTopicFulfilled({ topicId: activeTopic.id, fulfilled: false }))
-  }, [activeTopic.id, dispatch, topicFulfilledQuery])
+  }, [activeTopic.id, activeTopicIsFulfilled, dispatch])
 
   const isRenaming = useCallback(
     (topicId: string) => {

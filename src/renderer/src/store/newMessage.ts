@@ -113,6 +113,9 @@ export const messagesSlice = createSlice({
     },
     setTopicFulfilled(state, action: PayloadAction<SetTopicFulfilledPayload>) {
       const { topicId, fulfilled } = action.payload
+      if (state.fulfilledByTopic[topicId] === fulfilled) {
+        return
+      }
       state.fulfilledByTopic[topicId] = fulfilled
     },
     setDisplayCount(state, action: PayloadAction<number>) {
@@ -304,18 +307,17 @@ export const {
   selectEntities: selectMessageEntities // Selects the entity dictionary { id: message }
 } = messagesAdapter.getSelectors(selectMessagesState)
 
+const selectTopicMessageIds = (state: RootState, topicId: string) => state.messages.messageIdsByTopic[topicId]
+
 // Custom Selector: Selects messages for a specific topic in order
-export const selectMessagesForTopic = createSelector(
-  [
-    selectMessageEntities, // Input 1: Get the dictionary of all messages { id: message }
-    (state: RootState, topicId: string) => state.messages.messageIdsByTopic[topicId] // Input 2: Get the ordered IDs for the specific topic
-  ],
-  (messageEntities, topicMessageIds) => {
-    // Logger.log(`[Selector selectMessagesForTopic] Running for topicId: ${topicId}`); // Uncomment for debugging selector runs
+export const makeSelectMessagesForTopic = () =>
+  createSelector([selectMessageEntities, selectTopicMessageIds], (messageEntities, topicMessageIds) => {
     if (!topicMessageIds) {
-      return [] // Return an empty array if the topic or its IDs don't exist
+      return []
     }
-    // Map the ordered IDs to the actual message objects from the dictionary
-    return topicMessageIds.map((id) => messageEntities[id]).filter((m): m is Message => !!m) // Filter out undefined/null in case of inconsistencies
-  }
-)
+
+    return topicMessageIds.map((id) => messageEntities[id]).filter((m): m is Message => !!m)
+  })
+
+// Shared fallback selector for non-hook callers.
+export const selectMessagesForTopic = makeSelectMessagesForTopic()

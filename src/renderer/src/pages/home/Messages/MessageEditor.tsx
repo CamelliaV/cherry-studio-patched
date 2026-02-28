@@ -9,7 +9,7 @@ import type { ToolQuickPanelApi } from '@renderer/pages/home/Inputbar/types'
 import FileManager from '@renderer/services/FileManager'
 import PasteService from '@renderer/services/PasteService'
 import { useAppSelector } from '@renderer/store'
-import { selectMessagesForTopic } from '@renderer/store/newMessage'
+import { makeSelectMessagesForTopic } from '@renderer/store/newMessage'
 import type { FileMetadata } from '@renderer/types'
 import { FILE_TYPE } from '@renderer/types'
 import type { Message, MessageBlock } from '@renderer/types/newMessage'
@@ -54,7 +54,8 @@ const MessageBlockEditor: FC<Props> = ({ message, topicId, onSave, onResend, onC
   const textareaRef = useRef<TextAreaRef>(null)
   const isUserMessage = message.role === 'user'
 
-  const topicMessages = useAppSelector((state) => selectMessagesForTopic(state, topicId))
+  const selectMessagesForCurrentTopic = useMemo(makeSelectMessagesForTopic, [])
+  const topicMessages = useAppSelector((state) => selectMessagesForCurrentTopic(state, topicId))
 
   const noopQuickPanel = useMemo<ToolQuickPanelApi>(
     () => ({
