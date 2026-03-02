@@ -12,6 +12,8 @@ This file provides guidance to AI coding assistants when working with code in th
 - **Research via subagent**: Lean on `subagent` for external docs, APIs, news, and references.
 - **Always propose before executing**: Before making any changes, clearly explain your planned approach and wait for explicit user approval to ensure alignment and prevent unwanted modifications.
 - **Lint, test, and format before completion**: Coding tasks are only complete after running `pnpm lint`, `pnpm test`, and `pnpm format` successfully.
+- **Manual verification flow**: After finishing the test-check pipeline for a debugging task, run `pnpm start` so the user can validate behavior and then wait for user feedback.
+- **Debug write-up memory**: When a debugging fix is confirmed effective, write a short markdown note under `agent-notes/` and keep that directory git-ignored.
 - **Write conventional commits**: Commit small, focused changes using Conventional Commit messages (e.g., `feat:`, `fix:`, `refactor:`, `docs:`).
 - **README parity before commit/push**: Before attempting to commit or push, update both English and Chinese README files (`README.md` and `docs/zh/README.md`) and keep their content synchronized.
 

@@ -53,6 +53,7 @@ type EstimatedTokenPayload = {
   tokensCount: number
   contextCount: ReturnType<typeof getContextCount>
 }
+const MAX_ANCHOR_LINE_MESSAGES = 800
 
 const Messages: React.FC<MessagesProps> = ({
   assistant,
@@ -375,7 +376,7 @@ const Messages: React.FC<MessagesProps> = ({
     )
   }, [displayMessages])
 
-  const showMessageAnchor = true
+  const showMessageAnchor = displayMessages.length <= MAX_ANCHOR_LINE_MESSAGES
 
   return (
     <MessagesViewport>

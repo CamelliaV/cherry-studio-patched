@@ -19,8 +19,15 @@ interface TimelineAnchor {
   assistantPreview: string
 }
 
+interface AnchorPosition {
+  index: number
+  top: number
+}
+
 const MAX_USER_PREVIEW_LENGTH = 44
 const MAX_ASSISTANT_PREVIEW_LENGTH = 56
+const MAX_RENDERED_ANCHORS = 220
+const PREVIEW_ANCHOR_LIMIT = 260
 // Keep active marker logic aligned with ChatNavigation's visible-threshold behavior.
 const ACTIVE_TARGET_RATIO = 0.1
 // Prevent first/last node clipping at rounded track edges.
@@ -75,6 +82,8 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
   const updateRafIdRef = useRef<number | null>(null)
   const restoreTimerRef = useRef<number | null>(null)
   const hasRestoredRef = useRef(false)
+  const activeAnchorIndexRef = useRef(-1)
+  const anchorPositionsRef = useRef<AnchorPosition[]>([])
   const storageKey = useMemo(
     () => (persistKey ? `${TIMELINE_INDEX_STORAGE_PREFIX}${persistKey}` : undefined),
     [persistKey]
@@ -110,33 +119,84 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
     }))
   }, [messages])
 
+  const refreshAnchorPositions = useCallback(() => {
+    const messagesContainer = document.getElementById(containerId)
+    if (!messagesContainer || timelineAnchors.length === 0) {
+      anchorPositionsRef.current = []
+      return
+    }
+
+    const containerRect = messagesContainer.getBoundingClientRect()
+    const containerScrollTop = messagesContainer.scrollTop
+    const nextPositions: AnchorPosition[] = []
+
+    for (let i = 0; i < timelineAnchors.length; i++) {
+      const anchor = timelineAnchors[i]
+      if (!anchor) continue
+
+      const messageElement = document.getElementById(`message-${anchor.id}`)
+      if (!messageElement) continue
+
+      const messageRect = messageElement.getBoundingClientRect()
+      nextPositions.push({
+        index: i,
+        top: messageRect.top - containerRect.top + containerScrollTop
+      })
+    }
+
+    nextPositions.sort((a, b) => a.top - b.top)
+    anchorPositionsRef.current = nextPositions
+  }, [containerId, timelineAnchors])
+
+  const findNearestAnchorIndex = useCallback((targetTop: number) => {
+    const anchorPositions = anchorPositionsRef.current
+    if (anchorPositions.length === 0) {
+      return -1
+    }
+
+    let left = 0
+    let right = anchorPositions.length - 1
+
+    while (left < right) {
+      const mid = Math.floor((left + right) / 2)
+      if (anchorPositions[mid].top < targetTop) {
+        left = mid + 1
+      } else {
+        right = mid
+      }
+    }
+
+    const candidateIndices = [left, left - 1]
+      .filter((index) => index >= 0 && index < anchorPositions.length)
+      .map((index) => ({
+        distance: Math.abs(anchorPositions[index].top - targetTop),
+        timelineIndex: anchorPositions[index].index
+      }))
+
+    if (candidateIndices.length === 0) {
+      return -1
+    }
+
+    candidateIndices.sort((a, b) => a.distance - b.distance)
+    return candidateIndices[0].timelineIndex
+  }, [])
+
   const getNearestAnchorIndex = useCallback(() => {
     const messagesContainer = document.getElementById(containerId)
     if (!messagesContainer || timelineAnchors.length === 0) {
       return -1
     }
 
-    const containerRect = messagesContainer.getBoundingClientRect()
-    const targetY = containerRect.top + containerRect.height * ACTIVE_TARGET_RATIO
+    const targetTop = messagesContainer.scrollTop + messagesContainer.clientHeight * ACTIVE_TARGET_RATIO
+    let nearestAnchorIndex = findNearestAnchorIndex(targetTop)
 
-    let nearestAnchorIndex = -1
-    let nearestDistance = Number.POSITIVE_INFINITY
-
-    for (let i = 0; i < timelineAnchors.length; i++) {
-      const anchor = timelineAnchors[i]
-      const messageElement = document.getElementById(`message-${anchor.id}`)
-      if (!messageElement) continue
-
-      const messageRect = messageElement.getBoundingClientRect()
-      const distance = Math.abs(messageRect.top - targetY)
-      if (distance < nearestDistance) {
-        nearestDistance = distance
-        nearestAnchorIndex = i
-      }
+    if (nearestAnchorIndex === -1) {
+      refreshAnchorPositions()
+      nearestAnchorIndex = findNearestAnchorIndex(targetTop)
     }
 
     return nearestAnchorIndex
-  }, [containerId, timelineAnchors])
+  }, [containerId, findNearestAnchorIndex, refreshAnchorPositions, timelineAnchors.length])
 
   const persistTimelineIndex = useCallback(
     (index: number) => {
@@ -151,13 +211,26 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
   const updateActiveAnchor = useCallback(() => {
     const nearestAnchorIndex = getNearestAnchorIndex()
     if (nearestAnchorIndex === -1) {
-      setActiveAnchorId(undefined)
+      if (activeAnchorIndexRef.current !== -1) {
+        activeAnchorIndexRef.current = -1
+        setActiveAnchorId(undefined)
+      }
       return
     }
 
-    setActiveAnchorId(timelineAnchors[nearestAnchorIndex]?.id)
+    const nearestAnchorId = timelineAnchors[nearestAnchorIndex]?.id
+    if (!nearestAnchorId) {
+      return
+    }
+
+    if (nearestAnchorIndex === activeAnchorIndexRef.current && nearestAnchorId === activeAnchorId) {
+      return
+    }
+
+    activeAnchorIndexRef.current = nearestAnchorIndex
+    setActiveAnchorId(nearestAnchorId)
     persistTimelineIndex(nearestAnchorIndex)
-  }, [getNearestAnchorIndex, persistTimelineIndex, timelineAnchors])
+  }, [activeAnchorId, getNearestAnchorIndex, persistTimelineIndex, timelineAnchors])
 
   const jumpTimelineAnchor = useCallback(
     (direction: 'previous' | 'next') => {
@@ -177,6 +250,7 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
       }
 
       setActiveAnchorId(targetAnchor.id)
+      activeAnchorIndexRef.current = targetIndex
       persistTimelineIndex(targetIndex)
       const messageElement = document.getElementById(`message-${targetAnchor.id}`)
       if (!messageElement) {
@@ -200,7 +274,9 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
       }
 
       setActiveAnchorId(targetAnchor.id)
-      persistTimelineIndex(edge === 'first' ? 0 : timelineAnchors.length - 1)
+      const targetIndex = edge === 'first' ? 0 : timelineAnchors.length - 1
+      activeAnchorIndexRef.current = targetIndex
+      persistTimelineIndex(targetIndex)
       const messageElement = document.getElementById(`message-${targetAnchor.id}`)
       if (!messageElement) {
         return
@@ -273,6 +349,8 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
 
   useEffect(() => {
     hasRestoredRef.current = false
+    activeAnchorIndexRef.current = -1
+    anchorPositionsRef.current = []
   }, [storageKey])
 
   const restorePersistedAnchor = useCallback(
@@ -308,6 +386,7 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
       }
 
       hasRestoredRef.current = true
+      activeAnchorIndexRef.current = clampedIndex
       setActiveAnchorId(targetAnchor.id)
       scrollIntoView(messageElement, { behavior: 'auto', block: 'start', container: 'nearest' })
     },
@@ -340,21 +419,39 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
     }
 
     const initialUpdateTimer = window.setTimeout(() => {
+      refreshAnchorPositions()
       scheduleActiveAnchorUpdate()
     }, 80)
+    const handleResize = () => {
+      refreshAnchorPositions()
+      scheduleActiveAnchorUpdate()
+    }
     messagesContainer.addEventListener('scroll', scheduleActiveAnchorUpdate, { passive: true })
-    window.addEventListener('resize', scheduleActiveAnchorUpdate)
+    window.addEventListener('resize', handleResize)
 
     return () => {
       window.clearTimeout(initialUpdateTimer)
       messagesContainer.removeEventListener('scroll', scheduleActiveAnchorUpdate)
-      window.removeEventListener('resize', scheduleActiveAnchorUpdate)
+      window.removeEventListener('resize', handleResize)
       if (updateRafIdRef.current !== null) {
         cancelAnimationFrame(updateRafIdRef.current)
         updateRafIdRef.current = null
       }
     }
-  }, [containerId, isActive, scheduleActiveAnchorUpdate])
+  }, [containerId, isActive, refreshAnchorPositions, scheduleActiveAnchorUpdate])
+
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+
+    const refreshTimer = window.setTimeout(() => {
+      refreshAnchorPositions()
+      scheduleActiveAnchorUpdate()
+    }, 0)
+
+    return () => window.clearTimeout(refreshTimer)
+  }, [isActive, timelineAnchors, refreshAnchorPositions, scheduleActiveAnchorUpdate])
 
   const scrollToAnchor = useCallback((anchor: TimelineAnchor) => {
     const messageElement = document.getElementById(`message-${anchor.id}`)
@@ -368,6 +465,37 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
     return index % 5 === 0
   }
 
+  const renderedAnchorIndices = useMemo(() => {
+    if (timelineAnchors.length <= MAX_RENDERED_ANCHORS) {
+      return timelineAnchors.map((_, index) => index)
+    }
+
+    const indexSet = new Set<number>()
+    const stride = Math.max(1, Math.ceil(timelineAnchors.length / MAX_RENDERED_ANCHORS))
+    for (let index = 0; index < timelineAnchors.length; index += stride) {
+      indexSet.add(index)
+    }
+
+    indexSet.add(0)
+    indexSet.add(timelineAnchors.length - 1)
+
+    if (activeAnchorId) {
+      const activeIndex = timelineAnchors.findIndex((anchor) => anchor.id === activeAnchorId)
+      if (activeIndex >= 0) {
+        indexSet.add(activeIndex)
+      }
+    }
+
+    if (hoveredAnchorId) {
+      const hoveredIndex = timelineAnchors.findIndex((anchor) => anchor.id === hoveredAnchorId)
+      if (hoveredIndex >= 0) {
+        indexSet.add(hoveredIndex)
+      }
+    }
+
+    return [...indexSet].sort((a, b) => a - b)
+  }, [activeAnchorId, hoveredAnchorId, timelineAnchors])
+
   if (timelineAnchors.length === 0) {
     return null
   }
@@ -377,14 +505,18 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
       <MessageLineSurface>
         <AnchorTrack />
       </MessageLineSurface>
-      {timelineAnchors.map((anchor, index) => {
+      {renderedAnchorIndices.map((index) => {
+        const anchor = timelineAnchors[index]
+        if (!anchor) {
+          return null
+        }
         const positionRatio =
           timelineAnchors.length === 1
             ? 0.5
             : TIMELINE_EDGE_INSET_RATIO + (index / (timelineAnchors.length - 1)) * (1 - TIMELINE_EDGE_INSET_RATIO * 2)
         const top = `${positionRatio * 100}%`
         const active = anchor.id === activeAnchorId
-        const showPreview = hoveredAnchorId === anchor.id
+        const showPreview = timelineAnchors.length <= PREVIEW_ANCHOR_LIMIT && hoveredAnchorId === anchor.id
         const label = `${t('chat.navigation.history')} ${index + 1}`
         const tooltipTitle =
           [
@@ -407,6 +539,8 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()
+              activeAnchorIndexRef.current = index
+              setActiveAnchorId(anchor.id)
               persistTimelineIndex(index)
               scrollToAnchor(anchor)
             }}
@@ -460,26 +594,6 @@ const MessageLineSurface = styled.div`
     color-mix(in srgb, var(--color-background) 22%, transparent) 100%
   );
   border: 1px solid color-mix(in srgb, var(--color-border) 46%, transparent);
-  backdrop-filter: blur(14px) saturate(130%);
-  -webkit-backdrop-filter: blur(14px) saturate(130%);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 25%, transparent),
-    0 20px 36px -30px color-mix(in srgb, #000 80%, transparent),
-    0 0 24px -18px color-mix(in srgb, var(--color-primary) 72%, transparent);
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 3px;
-    border-radius: 999px;
-    pointer-events: none;
-    background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--color-primary) 14%, transparent) 0%,
-      transparent 36%,
-      color-mix(in srgb, var(--color-primary) 12%, transparent) 100%
-    );
-  }
 `
 
 const AnchorTrack = styled.div`
@@ -497,7 +611,6 @@ const AnchorTrack = styled.div`
     color-mix(in srgb, var(--color-primary) 22%, transparent) 100%
   );
   border-radius: 999px;
-  box-shadow: 0 0 12px color-mix(in srgb, var(--color-primary) 28%, transparent);
 `
 
 const AnchorButton = styled.button<{ $active: boolean }>`
@@ -517,10 +630,7 @@ const AnchorButton = styled.button<{ $active: boolean }>`
     props.$active
       ? 'radial-gradient(circle at 35% 30%, #fff 0%, color-mix(in srgb, var(--color-primary) 82%, #fff) 26%, var(--color-primary) 76% 100%)'
       : 'color-mix(in srgb, var(--color-background) 55%, transparent)'};
-  box-shadow: ${(props) =>
-    props.$active
-      ? '0 0 0 3px color-mix(in srgb, var(--color-primary) 24%, transparent), 0 0 18px color-mix(in srgb, var(--color-primary) 64%, transparent)'
-      : '0 0 0 1px color-mix(in srgb, var(--color-border) 28%, transparent)'};
+  box-shadow: ${(props) => (props.$active ? '0 0 0 2px color-mix(in srgb, var(--color-primary) 24%, transparent)' : 'none')};
   color: ${(props) => (props.$active ? '#fff' : 'var(--color-text-3)')};
   cursor: pointer;
   pointer-events: auto;
@@ -539,9 +649,7 @@ const AnchorButton = styled.button<{ $active: boolean }>`
     transform: translate(-50%, -50%) scale(1.12);
     border-color: color-mix(in srgb, var(--color-primary) 78%, transparent);
     background: color-mix(in srgb, var(--color-primary) 32%, transparent);
-    box-shadow:
-      0 0 0 2px color-mix(in srgb, var(--color-primary) 18%, transparent),
-      0 0 16px color-mix(in srgb, var(--color-primary) 42%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 18%, transparent);
   }
 `
 

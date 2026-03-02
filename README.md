@@ -124,6 +124,13 @@ This README reflects only the new functionality added in this patch series.
 - `Ctrl+Tab` / `Ctrl+Shift+Tab` handling now uses key latching to avoid repeated accidental tab hops while holding keys.
 - Chat flow history rendering was refactored to strongly typed data processing with memoized selectors for lower re-render overhead.
 
+22. Large-topic scroll performance and stability hardening
+- Optimized timeline-anchor lookup to avoid heavy per-scroll DOM scans in long conversations.
+- Reduced compositor pressure in message/timeline UI by removing expensive effects and forced GPU-layer hints.
+- Added adaptive limits for timeline anchor rendering in very large topics.
+- Added `content-visibility` optimization for message items to reduce offscreen rendering overhead.
+- Disabled timeline anchor rail automatically for very large message counts to avoid renderer saturation.
+
 ## Arch Linux Quick Install
 
 ```bash

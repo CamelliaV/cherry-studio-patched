@@ -265,17 +265,15 @@ const MessageContainer = styled.div`
   flex-direction: column;
   width: 100%;
   position: relative;
+  content-visibility: auto;
+  contain-intrinsic-size: 220px;
   transition: background-color 0.3s ease;
-  transform: translateZ(0);
-  will-change: transform;
   padding: 10px;
   padding-bottom: 0;
   border-radius: 10px;
   .menubar {
     opacity: 0;
     transition: opacity 0.2s ease;
-    transform: translateZ(0);
-    will-change: opacity;
     &.show {
       opacity: 1;
     }
