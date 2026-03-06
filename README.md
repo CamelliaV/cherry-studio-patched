@@ -78,6 +78,11 @@ This README reflects only the new functionality added in this patch series.
 - This makes inactive/failing provider sources easier to identify when groups contain similarly named models.
 
 13. Markdown export with image assets
+- Topic Markdown export now preserves image-only user inputs.
+- Export behavior:
+  - Pure text topic: only `.md`.
+  - Topic with uploaded image files: `.md` + sibling `<markdown-name>.assets/` folder, with Markdown image links pointing to copied files.
+  - URL-based images remain URL links in Markdown.
 
 14. GPT-5.2+ reasoning effort support
 - GPT-5.2 and newer non-chat, non-pro OpenAI reasoning models now expose the correct reasoning-effort options, including `xhigh` where supported.
@@ -86,53 +91,48 @@ This README reflects only the new functionality added in this patch series.
 15. Launcher action for next background image
 - When background slideshow is enabled, the `Ctrl+P` / `Cmd+P` launcher now includes a `Next Background Image` action.
 - The action is searchable, works in launcher popup/tab mode, uses UI translations, and closes the popup after a successful switch.
-- Topic Markdown export now preserves image-only user inputs.
-- Export behavior:
-  - Pure text topic: only `.md`.
-  - Topic with uploaded image files: `.md` + sibling `<markdown-name>.assets/` folder, with Markdown image links pointing to copied files.
-  - URL-based images remain URL links in Markdown.
 
-14. Token statistics dashboard
+16. Token statistics dashboard
 - Added a dedicated `Settings -> Statistics` page.
 - Token usage is aggregated at assistant/topic/conversation levels.
 - Includes prompt tokens, completion tokens, total tokens, message counts, and update time.
 
-15. Faster model-group management from chat navbar
+17. Faster model-group management from chat navbar
 - The top model switcher now includes an `Edit Model Groups` action.
 - Clicking it opens assistant settings directly on the model tab.
 - Model-group labels/counts in navbar selector are now fully localized.
 
-16. Background slideshow for chat content
+18. Background slideshow for chat content
 - Added a configurable background slideshow for the chat content area.
 - Settings are available in `Settings -> Display -> Background Slideshow`.
 - Supports multiple image folders, switch interval, opacity, and manual `Next Image`.
 - Added shortcut `Ctrl/Cmd+Shift+U` to reveal the current background image in folder.
 
-17. Claude Code compatibility mode for Anthropic providers
+19. Claude Code compatibility mode for Anthropic providers
 - Added a provider-level `Claude Code compatibility` toggle.
 - When enabled, requests use Claude Code-compatible headers and user-agent behavior.
 - Custom Header popup now supports quick applying Claude Code compatibility headers.
 
-18. Launcher assistant-click behavior fix
+20. Launcher assistant-click behavior fix
 - In launcher popup (`Ctrl/Cmd+P`), clicking an assistant now creates a new topic and keeps focus on that new topic tab.
 - Fixed the regression where UI could jump to the new topic and then snap back to the previously active tab.
 
-19. Plain text link detection in user messages
+21. Plain text link detection in user messages
 - When input-markdown rendering is disabled, plain URLs in user messages are now rendered as clickable links.
 - Includes safe external open behavior and tests for parsing/click handling.
 
-20. Multi-tab conversation switch state stability
+22. Multi-tab conversation switch state stability
 - Switching conversation tabs with `Ctrl+Tab` / `Ctrl+Shift+Tab` now preserves the per-tab reading scroll position reliably.
 - Returning to a previous tab no longer causes delayed jump caused by code-block re-layout after tab restore.
 - Timeline/navigation state binding is isolated per conversation tab container to prevent cross-tab overwrite.
 
-21. Conversation switching and history rendering polish
+23. Conversation switching and history rendering polish
 - Conversation tab panels now stay mounted to enable instant tab return with more reliable per-tab state retention.
 - Added a short loading skeleton + transition overlay when switching into conversations whose content is still loading.
 - `Ctrl+Tab` / `Ctrl+Shift+Tab` handling now uses key latching to avoid repeated accidental tab hops while holding keys.
 - Chat flow history rendering was refactored to strongly typed data processing with memoized selectors for lower re-render overhead.
 
-22. Large-topic scroll performance and stability hardening
+24. Large-topic scroll performance and stability hardening
 - Optimized timeline-anchor lookup to avoid heavy per-scroll DOM scans in long conversations.
 - Reduced compositor pressure in message/timeline UI by removing expensive effects and forced GPU-layer hints.
 - Added adaptive limits for timeline anchor rendering in very large topics.
