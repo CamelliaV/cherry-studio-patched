@@ -11,6 +11,7 @@ import 'dayjs/locale/zh-tw'
 
 import { loggerService } from '@logger'
 import { defaultLanguage } from '@shared/config/constant'
+import { normalizeLanguage } from '@shared/config/languages'
 import dayjs from 'dayjs'
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
@@ -48,7 +49,7 @@ const resources = Object.fromEntries(
 )
 
 export const getLanguage = () => {
-  return localStorage.getItem('language') || navigator.language || defaultLanguage
+  return normalizeLanguage(localStorage.getItem('language') || navigator.language || defaultLanguage)
 }
 
 export const getLanguageCode = () => {
@@ -71,7 +72,7 @@ const dayjsLocaleMap: Record<string, string> = {
 }
 
 export const setDayjsLocale = (language: string) => {
-  const dayjsLocale = dayjsLocaleMap[language] || 'en'
+  const dayjsLocale = dayjsLocaleMap[normalizeLanguage(language)] || 'en'
   dayjs.locale(dayjsLocale)
 }
 

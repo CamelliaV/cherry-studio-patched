@@ -28,7 +28,7 @@ const createModel = (overrides: Partial<Model> = {}): Model => ({
 
 describe('OpenAI Model Detection', () => {
   describe('isSupportNoneReasoningEffortModel', () => {
-    describe('should return true for GPT-5.1 and GPT-5.2 reasoning models', () => {
+    describe('should return true for GPT-5.1 and GPT-5.2+ reasoning models', () => {
       it('returns true for GPT-5.1 base model', () => {
         expect(isSupportNoneReasoningEffortModel(createModel({ id: 'gpt-5.1' }))).toBe(true)
         expect(isSupportNoneReasoningEffortModel(createModel({ id: 'GPT-5.1' }))).toBe(true)
@@ -55,6 +55,12 @@ describe('OpenAI Model Detection', () => {
 
       it('returns true for GPT-5.2 preview model', () => {
         expect(isSupportNoneReasoningEffortModel(createModel({ id: 'gpt-5.2-preview' }))).toBe(true)
+      })
+
+      it('returns true for GPT-5.3 and newer non-pro reasoning models', () => {
+        expect(isSupportNoneReasoningEffortModel(createModel({ id: 'gpt-5.3' }))).toBe(true)
+        expect(isSupportNoneReasoningEffortModel(createModel({ id: 'gpt-5.4-mini' }))).toBe(true)
+        expect(isSupportNoneReasoningEffortModel(createModel({ id: 'openai/gpt-5.4' }))).toBe(true)
       })
     })
 

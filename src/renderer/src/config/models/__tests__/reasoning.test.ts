@@ -1903,6 +1903,34 @@ describe('getModelSupportedReasoningEffortOptions', () => {
         'high'
       ])
     })
+
+    it('should return GPT-5.2+ options for newer GPT-5 reasoning models', () => {
+      expect(getModelSupportedReasoningEffortOptions(createModel({ id: 'gpt-5.3' }))).toEqual([
+        'default',
+        'none',
+        'low',
+        'medium',
+        'high',
+        'xhigh'
+      ])
+      expect(getModelSupportedReasoningEffortOptions(createModel({ id: 'gpt-5.4-mini' }))).toEqual([
+        'default',
+        'none',
+        'low',
+        'medium',
+        'high',
+        'xhigh'
+      ])
+    })
+
+    it('should return GPT-5.2+ pro options for newer GPT-5 pro models', () => {
+      expect(getModelSupportedReasoningEffortOptions(createModel({ id: 'gpt-5.4-pro' }))).toEqual([
+        'default',
+        'medium',
+        'high',
+        'xhigh'
+      ])
+    })
   })
 
   describe('Grok models', () => {

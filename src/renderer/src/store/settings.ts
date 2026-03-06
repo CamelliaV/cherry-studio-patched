@@ -39,6 +39,7 @@ import type {
 } from '@renderer/types/aiCoreTypes'
 import { uuid } from '@renderer/utils'
 import { API_SERVER_DEFAULTS, UpgradeChannel } from '@shared/config/constant'
+import { normalizeLanguage } from '@shared/config/languages'
 
 import type { RemoteSyncState } from './backup'
 
@@ -258,7 +259,7 @@ export const initialState: SettingsState = {
   showTopics: true,
   assistantsTabSortType: 'list',
   sendMessageShortcut: 'Enter',
-  language: navigator.language as LanguageVarious,
+  language: normalizeLanguage(navigator.language),
   targetLanguage: 'en-us',
   proxyMode: 'system',
   proxyUrl: undefined,

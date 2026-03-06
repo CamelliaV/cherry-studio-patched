@@ -23,6 +23,7 @@ import { createMainTextBlock, createThinkingBlock } from '@renderer/utils/messag
 import { getMainTextContent } from '@renderer/utils/messageUtils/find'
 import { replacePromptVariables } from '@renderer/utils/prompt'
 import { defaultLanguage } from '@shared/config/constant'
+import { normalizeLanguage } from '@shared/config/languages'
 import { IpcChannel } from '@shared/IpcChannel'
 import { Divider } from 'antd'
 import { cloneDeep, isEmpty } from 'lodash'
@@ -83,7 +84,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   }, [isFirstMessage, referenceText, userInputText])
 
   useEffect(() => {
-    i18n.changeLanguage(language || navigator.language || defaultLanguage)
+    i18n.changeLanguage(normalizeLanguage(language || navigator.language || defaultLanguage))
   }, [language])
 
   // Reset state when switching to home route

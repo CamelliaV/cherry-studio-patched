@@ -8,6 +8,7 @@ import { useTimer } from '@renderer/hooks/useTimer'
 import i18n from '@renderer/i18n'
 import type { ActionItem } from '@renderer/types/selectionTypes'
 import { defaultLanguage } from '@shared/config/constant'
+import { normalizeLanguage } from '@shared/config/languages'
 import { IpcChannel } from '@shared/IpcChannel'
 import { Avatar } from 'antd'
 import { ClipboardCheck, ClipboardCopy, ClipboardX, MessageSquareHeart } from 'lucide-react'
@@ -181,7 +182,7 @@ const SelectionToolbar: FC<{ demo?: boolean }> = ({ demo = false }) => {
   }, [demo, isCompact, actionItems])
 
   useEffect(() => {
-    !demo && i18n.changeLanguage(language || navigator.language || defaultLanguage)
+    !demo && i18n.changeLanguage(normalizeLanguage(language || navigator.language || defaultLanguage))
   }, [language, demo])
 
   useEffect(() => {

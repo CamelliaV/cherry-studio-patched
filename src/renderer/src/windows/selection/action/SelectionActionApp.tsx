@@ -4,6 +4,7 @@ import { useSettings } from '@renderer/hooks/useSettings'
 import i18n from '@renderer/i18n'
 import type { ActionItem } from '@renderer/types/selectionTypes'
 import { defaultLanguage } from '@shared/config/constant'
+import { normalizeLanguage } from '@shared/config/languages'
 import { IpcChannel } from '@shared/IpcChannel'
 import { Button, Slider, Tooltip } from 'antd'
 import { Droplet, Minus, Pin, X } from 'lucide-react'
@@ -75,7 +76,7 @@ const SelectionActionApp: FC = () => {
   }, [isAutoClose, isPinned])
 
   useEffect(() => {
-    i18n.changeLanguage(language || navigator.language || defaultLanguage)
+    i18n.changeLanguage(normalizeLanguage(language || navigator.language || defaultLanguage))
   }, [language])
 
   useEffect(() => {

@@ -58,6 +58,7 @@ import {
 } from '@renderer/utils/provider'
 import { API_SERVER_DEFAULTS } from '@shared/config/constant'
 import { defaultByPassRules, UpgradeChannel } from '@shared/config/constant'
+import { normalizeLanguage } from '@shared/config/languages'
 import { isEmpty } from 'lodash'
 import { createMigrate } from 'redux-persist'
 
@@ -369,7 +370,7 @@ const migrateConfig = {
         ...state,
         settings: {
           ...state.settings,
-          language: navigator.language
+          language: normalizeLanguage(navigator.language)
         }
       }
     } catch (error) {

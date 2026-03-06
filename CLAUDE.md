@@ -8,11 +8,11 @@ This file provides guidance to AI coding assistants when working with code in th
 - **Match the house style**: Reuse existing patterns, naming, and conventions.
 - **Search smart**: Prefer `ast-grep` for semantic queries; fall back to `rg`/`grep` when needed.
 - **Log centrally**: Route all logging through `loggerService` with the right context—no `console.log`.
-- **Locale discipline**: Do not hardcode user-facing UI text. Add i18n keys (at minimum in `locales/en-us.json`, `locales/zh-cn.json`, and `locales/zh-tw.json`) and keep locale files in sync.
+- **Locale discipline**: For any new UI feature, do not hardcode user-facing UI text. Add real translated i18n entries in `src/renderer/src/i18n/locales/en-us.json`, `src/renderer/src/i18n/locales/zh-cn.json`, `src/renderer/src/i18n/locales/zh-tw.json`, and relevant files under `src/renderer/src/i18n/translate/` (for example `ja-jp.json`). Do not leave new UI strings as `[to be translated]`, and keep locale files in sync.
 - **Research via subagent**: Lean on `subagent` for external docs, APIs, news, and references.
 - **Always propose before executing**: Before making any changes, clearly explain your planned approach and wait for explicit user approval to ensure alignment and prevent unwanted modifications.
 - **Lint, test, and format before completion**: Coding tasks are only complete after running `pnpm lint`, `pnpm test`, and `pnpm format` successfully.
-- **Manual verification flow**: After finishing the test-check pipeline for a debugging task, run `pnpm start` so the user can validate behavior and then wait for user feedback.
+- **Manual verification flow**: After finishing the test-check pipeline for any feature implementation or bugfix, run `pnpm start` so the user can validate behavior and then wait for user feedback.
 - **Debug write-up memory**: When a debugging fix is confirmed effective, write a short markdown note under `agent-notes/` and keep that directory git-ignored.
 - **Write conventional commits**: Commit small, focused changes using Conventional Commit messages (e.g., `feat:`, `fix:`, `refactor:`, `docs:`).
 - **README parity before commit/push**: Before attempting to commit or push, update both English and Chinese README files (`README.md` and `docs/zh/README.md`) and keep their content synchronized.

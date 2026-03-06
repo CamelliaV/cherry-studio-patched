@@ -78,6 +78,14 @@ This README reflects only the new functionality added in this patch series.
 - This makes inactive/failing provider sources easier to identify when groups contain similarly named models.
 
 13. Markdown export with image assets
+
+14. GPT-5.2+ reasoning effort support
+- GPT-5.2 and newer non-chat, non-pro OpenAI reasoning models now expose the correct reasoning-effort options, including `xhigh` where supported.
+- This keeps Cherry Studio aligned with the higher reasoning budget available for newer GPT-5 reasoning models.
+
+15. Launcher action for next background image
+- When background slideshow is enabled, the `Ctrl+P` / `Cmd+P` launcher now includes a `Next Background Image` action.
+- The action is searchable, works in launcher popup/tab mode, uses UI translations, and closes the popup after a successful switch.
 - Topic Markdown export now preserves image-only user inputs.
 - Export behavior:
   - Pure text topic: only `.md`.

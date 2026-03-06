@@ -18,6 +18,7 @@ import {
 import { delay, runAsyncFunction } from '@renderer/utils'
 import { checkDataLimit } from '@renderer/utils'
 import { defaultLanguage } from '@shared/config/constant'
+import { normalizeLanguage } from '@shared/config/languages'
 import { IpcChannel } from '@shared/IpcChannel'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect } from 'react'
@@ -125,7 +126,7 @@ export function useAppInit() {
   }, [proxyUrl, proxyMode, proxyBypassRules])
 
   useEffect(() => {
-    const currentLanguage = language || navigator.language || defaultLanguage
+    const currentLanguage = normalizeLanguage(language || navigator.language || defaultLanguage)
     i18n.changeLanguage(currentLanguage)
     setDayjsLocale(currentLanguage)
   }, [language])

@@ -2,8 +2,10 @@ import { loggerService } from '@logger'
 import AssistantAvatar from '@renderer/components/Avatar/AssistantAvatar'
 import AddAssistantPopup from '@renderer/components/Popups/AddAssistantPopup'
 import { db } from '@renderer/databases'
+import { useSettings } from '@renderer/hooks/useSettings'
 import { useShortcutDisplay } from '@renderer/hooks/useShortcuts'
 import { getDefaultTopic } from '@renderer/services/AssistantService'
+import { backgroundSlideshowService } from '@renderer/services/BackgroundSlideshowService'
 import { useAppDispatch } from '@renderer/store'
 import { addTopic as addTopicAction, setModel as setModelAction } from '@renderer/store/assistants'
 import type { Assistant, Topic } from '@renderer/types'
@@ -28,12 +30,21 @@ interface LauncherGroup {
   assistantEntryTopic: Topic
 }
 
-interface LauncherEntry {
+interface LauncherConversationEntry {
   key: string
   assistant: Assistant
   topic: Topic
   type: 'assistant' | 'topic'
 }
+
+interface LauncherActionEntry {
+  key: string
+  label: string
+  type: 'action'
+  action: 'next_background_image'
+}
+
+type LauncherEntry = LauncherConversationEntry | LauncherActionEntry
 
 interface LauncherNavigatorProps {
   assistants: Assistant[]
@@ -59,11 +70,13 @@ const LauncherNavigator: React.FC<LauncherNavigatorProps> = ({
 }) => {
   const { t } = useTranslation()
   const dispatch = useAppDispatch()
+  const { backgroundSlideshowEnabled } = useSettings()
   const [searchText, setSearchText] = useState('')
   const [highlightedKey, setHighlightedKey] = useState('')
   const [isCreatingAssistant, setIsCreatingAssistant] = useState(false)
   const [isCreatingTopic, setIsCreatingTopic] = useState(false)
   const openLauncherShortcut = useShortcutDisplay('open_launcher')
+  const nextBackgroundImageLabel = t('settings.quickPanel.next_background_image')
   const searchInputRef = useRef<InputRef>(null)
   const normalizedSearchText = searchText.trim().toLocaleLowerCase()
   const { getAssistantContextMenuItems, getTopicContextMenuItems } = useNavigatorContextMenus({
@@ -108,8 +121,27 @@ const LauncherNavigator: React.FC<LauncherNavigatorProps> = ({
     return groups
   }, [assistants, normalizedSearchText, t])
 
-  const launcherEntries = useMemo<LauncherEntry[]>(() => {
-    const entries: LauncherEntry[] = []
+  const launcherActionEntries = useMemo<LauncherActionEntry[]>(() => {
+    if (!backgroundSlideshowEnabled) {
+      return []
+    }
+
+    if (normalizedSearchText && !nextBackgroundImageLabel.toLocaleLowerCase().includes(normalizedSearchText)) {
+      return []
+    }
+
+    return [
+      {
+        key: 'action:next_background_image',
+        label: nextBackgroundImageLabel,
+        type: 'action',
+        action: 'next_background_image'
+      }
+    ]
+  }, [backgroundSlideshowEnabled, nextBackgroundImageLabel, normalizedSearchText])
+
+  const launcherConversationEntries = useMemo<LauncherConversationEntry[]>(() => {
+    const entries: LauncherConversationEntry[] = []
 
     for (const group of launcherGroups) {
       entries.push({
@@ -131,6 +163,11 @@ const LauncherNavigator: React.FC<LauncherNavigatorProps> = ({
 
     return entries
   }, [launcherGroups])
+
+  const launcherEntries = useMemo<LauncherEntry[]>(
+    () => [...launcherActionEntries, ...launcherConversationEntries],
+    [launcherActionEntries, launcherConversationEntries]
+  )
 
   useEffect(() => {
     if (mode !== 'popup') {
@@ -203,10 +240,27 @@ const LauncherNavigator: React.FC<LauncherNavigatorProps> = ({
     [dispatch, isCreatingTopic, onSelect, t]
   )
 
+  const handleNextBackgroundImage = useCallback(async () => {
+    const nextImage = await backgroundSlideshowService.nextImage()
+    if (!nextImage) {
+      window.toast.warning(t('settings.display.background.no_images'))
+      return
+    }
+
+    if (mode === 'popup') {
+      onClose?.()
+    }
+  }, [mode, onClose, t])
+
   const selectEntry = useCallback(
-    (entry: LauncherEntry) => {
+    async (entry: LauncherEntry) => {
+      if (entry.type === 'action') {
+        await handleNextBackgroundImage()
+        return
+      }
+
       if (entry.type === 'assistant') {
-        void createTopicForAssistant(entry.assistant)
+        await createTopicForAssistant(entry.assistant)
         return
       }
 
@@ -215,7 +269,7 @@ const LauncherNavigator: React.FC<LauncherNavigatorProps> = ({
         onClose?.()
       }
     },
-    [createTopicForAssistant, mode, onClose, onSelect]
+    [createTopicForAssistant, handleNextBackgroundImage, mode, onClose, onSelect]
   )
 
   const onSearchInputKeyDown = useCallback(
@@ -235,7 +289,7 @@ const LauncherNavigator: React.FC<LauncherNavigatorProps> = ({
         const selectedEntry =
           launcherEntries.find((entry) => entry.key === highlightedKey) ?? launcherEntries.at(0) ?? null
         if (selectedEntry) {
-          selectEntry(selectedEntry)
+          void selectEntry(selectedEntry)
         }
         return
       }
@@ -301,7 +355,25 @@ const LauncherNavigator: React.FC<LauncherNavigatorProps> = ({
         {mode === 'tab' && openLauncherShortcut && <ShortcutHint>{openLauncherShortcut}</ShortcutHint>}
       </SearchSection>
       <ResultsSection data-mode={mode}>
-        {launcherGroups.length === 0 && <EmptyState>{t('quickPanel.noResult')}</EmptyState>}
+        {launcherEntries.length === 0 && <EmptyState>{t('settings.quickPanel.noResult')}</EmptyState>}
+        {launcherActionEntries.map((entry) => (
+          <GroupCard key={entry.key}>
+            <LauncherButton
+              type="button"
+              data-level={0}
+              data-highlighted={highlightedKey === entry.key}
+              data-active={false}
+              onMouseEnter={() => setHighlightedKey(entry.key)}
+              onClick={() => void selectEntry(entry)}>
+              <LeftContent>
+                <TitleText>{entry.label}</TitleText>
+              </LeftContent>
+              <RightContent>
+                <ChevronRight size={14} />
+              </RightContent>
+            </LauncherButton>
+          </GroupCard>
+        ))}
         {launcherGroups.map((group) => (
           <GroupCard key={group.assistant.id}>
             <Dropdown menu={{ items: getAssistantContextMenuItems(group.assistant) }} trigger={['contextMenu']}>

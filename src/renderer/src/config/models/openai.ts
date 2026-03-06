@@ -3,6 +3,16 @@ import { getLowerBaseModelName } from '@renderer/utils'
 
 export const OPENAI_NO_SUPPORT_DEV_ROLE_MODELS = ['o1-preview', 'o1-mini']
 
+const getGPT5MinorVersion = (model: Model): number | undefined => {
+  const modelId = getLowerBaseModelName(model.id)
+  const match = modelId.match(/gpt-5(?:\.(\d+))?(?=$|[^\d])/)
+  if (!match?.[1]) {
+    return undefined
+  }
+
+  return Number.parseInt(match[1], 10)
+}
+
 export function isOpenAILLMModel(model: Model): boolean {
   if (!model) {
     return false
@@ -37,7 +47,7 @@ export const isGPT5ProModel = (model: Model) => {
 
 export const isGPT52ProModel = (model: Model) => {
   const modelId = getLowerBaseModelName(model.id)
-  return modelId.includes('gpt-5.2-pro')
+  return isGPT52SeriesModel(model) && modelId.includes('pro')
 }
 
 export const isGPT51CodexMaxModel = (model: Model) => {
@@ -52,7 +62,8 @@ export const isOpenAIOpenWeightModel = (model: Model) => {
 
 export const isGPT5SeriesModel = (model: Model) => {
   const modelId = getLowerBaseModelName(model.id)
-  return modelId.includes('gpt-5') && !modelId.includes('gpt-5.1') && !modelId.includes('gpt-5.2')
+  const minorVersion = getGPT5MinorVersion(model)
+  return modelId.includes('gpt-5') && (minorVersion === undefined || minorVersion === 0)
 }
 
 export const isGPT5SeriesReasoningModel = (model: Model) => {
@@ -61,13 +72,12 @@ export const isGPT5SeriesReasoningModel = (model: Model) => {
 }
 
 export const isGPT51SeriesModel = (model: Model) => {
-  const modelId = getLowerBaseModelName(model.id)
-  return modelId.includes('gpt-5.1')
+  return getGPT5MinorVersion(model) === 1
 }
 
 export const isGPT52SeriesModel = (model: Model) => {
-  const modelId = getLowerBaseModelName(model.id)
-  return modelId.includes('gpt-5.2')
+  const minorVersion = getGPT5MinorVersion(model)
+  return minorVersion !== undefined && minorVersion >= 2
 }
 
 export function isSupportVerbosityModel(model: Model): boolean {
@@ -80,7 +90,7 @@ export function isSupportVerbosityModel(model: Model): boolean {
 /**
  * Determines if a model supports the "none" reasoning effort parameter.
  *
- * This applies to GPT-5.1 and GPT-5.2 series reasoning models (non-chat, non-pro variants).
+ * This applies to GPT-5.1 and GPT-5.2+ series reasoning models (non-chat, non-pro variants).
  * These models allow setting reasoning_effort to "none" to skip reasoning steps.
  *
  * @param model - The model to check

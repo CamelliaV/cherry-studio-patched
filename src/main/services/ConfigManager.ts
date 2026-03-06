@@ -16,6 +16,7 @@
  */
 import type { UpgradeChannel } from '@shared/config/constant'
 import { defaultLanguage, ZOOM_SHORTCUTS } from '@shared/config/constant'
+import { normalizeLanguage } from '@shared/config/languages'
 import type { LanguageVarious, Shortcut } from '@types'
 import { ThemeMode } from '@types'
 import { app } from 'electron'
@@ -62,8 +63,8 @@ export class ConfigManager {
   }
 
   getLanguage(): LanguageVarious {
-    const locale = Object.keys(locales).includes(app.getLocale()) ? app.getLocale() : defaultLanguage
-    return this.get(ConfigKeys.Language, locale) as LanguageVarious
+    const locale = normalizeLanguage(Object.keys(locales).includes(app.getLocale()) ? app.getLocale() : defaultLanguage)
+    return normalizeLanguage(this.get(ConfigKeys.Language, locale) as string)
   }
 
   setLanguage(lang: LanguageVarious) {

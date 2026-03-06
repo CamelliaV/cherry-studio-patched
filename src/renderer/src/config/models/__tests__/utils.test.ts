@@ -7,6 +7,7 @@ import {
   isGPT5SeriesModel,
   isGPT5SeriesReasoningModel,
   isGPT51SeriesModel,
+  isGPT52SeriesModel,
   isOpenAIChatCompletionOnlyModel,
   isOpenAILLMModel,
   isOpenAIModel,
@@ -187,6 +188,18 @@ describe('model utils', () => {
     describe('isGPT51SeriesModel', () => {
       it('returns true for GPT-5.1 models', () => {
         expect(isGPT51SeriesModel(createModel({ id: 'gpt-5.1-mini' }))).toBe(true)
+      })
+    })
+
+    describe('isGPT52SeriesModel', () => {
+      it('returns true for GPT-5.2 and newer models', () => {
+        expect(isGPT52SeriesModel(createModel({ id: 'gpt-5.2-mini' }))).toBe(true)
+        expect(isGPT52SeriesModel(createModel({ id: 'gpt-5.4-preview' }))).toBe(true)
+      })
+
+      it('returns false for GPT-5 and GPT-5.1 models', () => {
+        expect(isGPT52SeriesModel(createModel({ id: 'gpt-5-preview' }))).toBe(false)
+        expect(isGPT52SeriesModel(createModel({ id: 'gpt-5.1-mini' }))).toBe(false)
       })
     })
 
