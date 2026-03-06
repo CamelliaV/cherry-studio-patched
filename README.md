@@ -143,6 +143,10 @@ This README reflects only the new functionality added in this patch series.
 - In the chat conversation multi-tab strip, `Ctrl/Cmd+W` now closes the active conversation tab.
 - The last remaining conversation tab stays open, so the window and current conversation view are not closed accidentally.
 
+26. Chat message viewport layout fix
+- Fixed a layout regression where the conversation header could render while the message viewport collapsed to zero height.
+- The shared message scroller now explicitly stretches to fill the available chat area, preventing the chat body from disappearing.
+
 ## Arch Linux Quick Install
 
 ```bash

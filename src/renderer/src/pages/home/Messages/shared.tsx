@@ -27,6 +27,9 @@ export const MessagesViewport = styled.div`
 
 export const MessagesContainer = styled(Scrollbar)<ContainerProps>`
   display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
   flex-direction: column-reverse;
   overflow-x: hidden;
   z-index: 1;
