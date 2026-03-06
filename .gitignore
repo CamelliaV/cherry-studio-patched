@@ -76,3 +76,5 @@ YOUR_MEMORY_FILE_PATH
 
 .sessions/
 agent-notes/
+pkgbuilds/**/src/
+pkgbuilds/**/pkg/

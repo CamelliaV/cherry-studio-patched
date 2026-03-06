@@ -1482,7 +1482,7 @@ class FileStorage {
     }
   }
 
-  public saveImage = async (_: Electron.IpcMainInvokeEvent, name: string, data: string): Promise<void> => {
+  public saveImage = async (_: Electron.IpcMainInvokeEvent, name: string, data: string): Promise<boolean> => {
     try {
       const filePath = dialog.showSaveDialogSync({
         defaultPath: `${name}.png`,
@@ -1492,10 +1492,12 @@ class FileStorage {
       if (filePath) {
         const parseResult = parseDataUrl(data)
         fs.writeFileSync(filePath, parseResult?.data ?? data, 'base64')
+        return true
       }
     } catch (error) {
       logger.error('[IPC - Error] An error occurred saving the image:', error as Error)
     }
+    return false
   }
 
   public selectFolder = async (_: Electron.IpcMainInvokeEvent, options: OpenDialogOptions): Promise<string | null> => {

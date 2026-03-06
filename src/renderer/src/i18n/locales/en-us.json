@@ -85,6 +85,7 @@
     "session": {
       "accessible_paths": {
         "add": "Add directory",
+        "default_hint": "A default workspace will be created automatically if not specified.",
         "duplicate": "This directory is already included.",
         "empty": "Select at least one directory that the agent can access.",
         "error": {
@@ -1107,6 +1108,7 @@
       },
       "export": {
         "image": "Export as image",
+        "image_saved": "Image saved successfully",
         "joplin": "Export to Joplin",
         "md": {
           "label": "Export as markdown",
@@ -2964,7 +2966,9 @@
     "no_description": "No description available",
     "no_installed_plugins": "No plugins installed yet",
     "no_results": "No plugins found",
+    "no_results_skills": "No skills found",
     "search_placeholder": "Search plugins...",
+    "search_placeholder_skills": "Search skills...",
     "showing_results": "Showing {{count}} plugin",
     "showing_results_one": "Showing {{count}} plugin",
     "showing_results_other": "Showing {{count}} plugins",
@@ -4675,6 +4679,13 @@
       "open_link_external": {
         "title": "Open new-window links in browser"
       },
+      "region": {
+        "auto": "Auto detect",
+        "cn": "China",
+        "description": "Filtering unsupported mini-programs based on the region",
+        "global": "Global",
+        "title": "Mini Program filter"
+      },
       "reset_tooltip": "Reset to default",
       "sidebar_description": "Show active mini apps in the sidebar",
       "sidebar_title": "Sidebar Active Mini Apps Display",
@@ -5161,6 +5172,7 @@
       "reset_to_default": "Reset to Default",
       "search_message": "Search Message",
       "search_message_in_chat": "Search Message in Current Chat",
+      "select_model": "Select Model",
       "selection_assistant_select_text": "Selection Assistant: Select Text",
       "selection_assistant_toggle": "Toggle Selection Assistant",
       "show_app": "Show/Hide App",
@@ -5580,6 +5592,7 @@
       "scroll_sync": "Scroll Sync Settings",
       "title": "Translation Settings"
     },
+    "stop": "Stop Translation",
     "success": {
       "custom": {
         "delete": "Deleted successfully",

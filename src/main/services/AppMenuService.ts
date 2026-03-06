@@ -55,7 +55,18 @@ export class AppMenuService {
       },
       {
         label: appMenu.file,
-        submenu: [{ role: 'close', label: appMenu.close }]
+        submenu: [
+          {
+            label: appMenu.close,
+            accelerator: 'CommandOrControl+W',
+            click: () => {
+              const mainWindow = windowService.getMainWindow()
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send(IpcChannel.Windows_CloseCurrentTab)
+              }
+            }
+          }
+        ]
       },
       {
         label: appMenu.edit,

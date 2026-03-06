@@ -64,9 +64,10 @@ const attachKeyboardHandler = (contents: Electron.WebContents) => {
       const isFindShortcut = (input.control || input.meta) && k === 'f'
       const isPrintShortcut = (input.control || input.meta) && k === 'p'
       const isSaveShortcut = (input.control || input.meta) && k === 's'
+      const isCloseCurrentTabShortcut = (input.control || input.meta) && !input.alt && !input.shift && k === 'w'
       const isEscape = k === 'escape'
       const isEnter = k === 'enter'
-      return isFindShortcut || isPrintShortcut || isSaveShortcut || isEscape || isEnter
+      return isFindShortcut || isPrintShortcut || isSaveShortcut || isCloseCurrentTabShortcut || isEscape || isEnter
     }
 
     if (!isHandledShortcut(key)) {
@@ -81,6 +82,7 @@ const attachKeyboardHandler = (contents: Electron.WebContents) => {
     const isFindShortcut = (input.control || input.meta) && key === 'f'
     const isPrintShortcut = (input.control || input.meta) && key === 'p'
     const isSaveShortcut = (input.control || input.meta) && key === 's'
+    const isCloseCurrentTabShortcut = (input.control || input.meta) && !input.alt && !input.shift && key === 'w'
 
     // Always prevent Cmd/Ctrl+F to override the guest page's native find dialog
     if (isFindShortcut) {
@@ -88,8 +90,13 @@ const attachKeyboardHandler = (contents: Electron.WebContents) => {
     }
 
     // Prevent default print/save dialogs and handle them with custom logic
-    if (isPrintShortcut || isSaveShortcut) {
+    if (isPrintShortcut || isSaveShortcut || isCloseCurrentTabShortcut) {
       event.preventDefault()
+    }
+
+    if (isCloseCurrentTabShortcut) {
+      host.send(IpcChannel.Windows_CloseCurrentTab)
+      return
     }
 
     // Send the hotkey event to the renderer

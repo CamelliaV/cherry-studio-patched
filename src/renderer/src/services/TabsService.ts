@@ -117,6 +117,20 @@ class TabsService {
   }
 
   /**
+   * 关闭当前激活的标签页
+   */
+  public closeActiveTab(): boolean {
+    const activeTabId = this.getActiveTabId()
+
+    if (!activeTabId) {
+      logger.warn('No active tab to close')
+      return false
+    }
+
+    return this.closeTab(activeTabId)
+  }
+
+  /**
    * 设置激活的标签页
    * @param tabId 标签页ID
    */

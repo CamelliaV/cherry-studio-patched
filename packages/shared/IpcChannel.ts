@@ -42,6 +42,7 @@ export enum IpcChannel {
   App_SetFullScreen = 'app:set-full-screen',
   App_IsFullScreen = 'app:is-full-screen',
   App_GetSystemFonts = 'app:get-system-fonts',
+  App_GetIpCountry = 'app:get-ip-country',
   APP_CrashRenderProcess = 'app:crash-render-process',
 
   App_MacIsProcessTrusted = 'app:mac-is-process-trusted',
@@ -155,6 +156,7 @@ export enum IpcChannel {
   Windows_Maximize = 'window:maximize',
   Windows_Unmaximize = 'window:unmaximize',
   Windows_Close = 'window:close',
+  Windows_CloseCurrentTab = 'window:close-current-tab',
   Windows_IsMaximized = 'window:is-maximized',
   Windows_MaximizedChanged = 'window:maximized-changed',
   Windows_NavigateToAbout = 'window:navigate-to-about',

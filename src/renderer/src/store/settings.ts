@@ -25,6 +25,7 @@ import type {
   CodeStyleVarious,
   LanguageVarious,
   MathEngine,
+  MinAppRegionFilter,
   OpenAIServiceTier,
   PaintingProvider,
   S3Config,
@@ -196,6 +197,8 @@ export interface SettingsState {
   maxKeepAliveMinapps: number
   showOpenedMinappsInSidebar: boolean
   minappsOpenLinkExternal: boolean
+  /** Mini app region filter: 'auto' (detect from IP), 'CN', or 'Global' */
+  minAppRegion: MinAppRegionFilter
   // 隐私设置
   enableDataCollection: boolean
   enableSpellCheck: boolean
@@ -385,6 +388,7 @@ export const initialState: SettingsState = {
   maxKeepAliveMinapps: 3,
   showOpenedMinappsInSidebar: true,
   minappsOpenLinkExternal: false,
+  minAppRegion: 'auto',
   enableDataCollection: false,
   enableSpellCheck: false,
   spellCheckLanguages: [],
@@ -819,6 +823,9 @@ const settingsSlice = createSlice({
     setMinappsOpenLinkExternal: (state, action: PayloadAction<boolean>) => {
       state.minappsOpenLinkExternal = action.payload
     },
+    setMinAppRegion: (state, action: PayloadAction<MinAppRegionFilter>) => {
+      state.minAppRegion = action.payload
+    },
     setEnableDataCollection: (state, action: PayloadAction<boolean>) => {
       state.enableDataCollection = action.payload
     },
@@ -1022,6 +1029,7 @@ export const {
   setMaxKeepAliveMinapps,
   setShowOpenedMinappsInSidebar,
   setMinappsOpenLinkExternal,
+  setMinAppRegion,
   setEnableDataCollection,
   setEnableSpellCheck,
   setSpellCheckLanguages,

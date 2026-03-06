@@ -139,6 +139,10 @@ This README reflects only the new functionality added in this patch series.
 - Added `content-visibility` optimization for message items to reduce offscreen rendering overhead.
 - Disabled timeline anchor rail automatically for very large message counts to avoid renderer saturation.
 
+25. Conversation-tab close shortcut
+- In the chat conversation multi-tab strip, `Ctrl/Cmd+W` now closes the active conversation tab.
+- The last remaining conversation tab stays open, so the window and current conversation view are not closed accidentally.
+
 ## Arch Linux Quick Install
 
 ```bash

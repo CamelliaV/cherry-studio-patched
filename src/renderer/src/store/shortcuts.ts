@@ -149,6 +149,13 @@ const initialState: ShortcutsState = {
       system: false
     },
     {
+      key: 'select_model',
+      shortcut: ['CommandOrControl', 'Shift', 'M'],
+      editable: true,
+      enabled: true,
+      system: false
+    },
+    {
       key: 'exit_fullscreen',
       shortcut: ['Escape'],
       editable: false,

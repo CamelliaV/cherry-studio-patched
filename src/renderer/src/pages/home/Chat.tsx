@@ -5,7 +5,9 @@ import { ContentSearch } from '@renderer/components/ContentSearch'
 import { HStack } from '@renderer/components/Layout'
 import MultiSelectActionPopup from '@renderer/components/Popups/MultiSelectionPopup'
 import PromptPopup from '@renderer/components/Popups/PromptPopup'
+import { SelectModelPopup } from '@renderer/components/Popups/SelectModelPopup'
 import { QuickPanelProvider } from '@renderer/components/QuickPanel'
+import { isEmbeddingModel, isRerankModel, isWebSearchModel } from '@renderer/config/models'
 import { useCreateDefaultSession } from '@renderer/hooks/agents/useCreateDefaultSession'
 import { useAssistant, useAssistants } from '@renderer/hooks/useAssistant'
 import { useChatContext } from '@renderer/hooks/useChatContext'
@@ -16,7 +18,7 @@ import { useShowTopics } from '@renderer/hooks/useStore'
 import { useTimer } from '@renderer/hooks/useTimer'
 import { EVENT_NAMES, EventEmitter } from '@renderer/services/EventService'
 import store from '@renderer/store'
-import type { Assistant, Topic } from '@renderer/types'
+import type { Assistant, Model, Topic } from '@renderer/types'
 import { classNames } from '@renderer/utils'
 import { buildAgentSessionTopicId } from '@renderer/utils/agentSession'
 import { Alert, Dropdown, Flex } from 'antd'
@@ -30,12 +32,14 @@ import styled from 'styled-components'
 
 import ChatNavbar from './components/ChatNavBar'
 import ConversationLoadingState from './components/ConversationLoadingState'
+import { useCloseActiveConversationTabShortcut } from './hooks/useCloseActiveConversationTabShortcut'
 import AgentSessionInputbar from './Inputbar/AgentSessionInputbar'
 import { PinnedTodoPanel } from './Inputbar/components/PinnedTodoPanel'
 import Inputbar from './Inputbar/Inputbar'
 import AgentSessionMessages from './Messages/AgentSessionMessages'
 import ChatNavigation from './Messages/ChatNavigation'
 import Messages from './Messages/Messages'
+import NarrowLayout from './Messages/NarrowLayout'
 import Tabs from './Tabs'
 import { useNavigatorContextMenus } from './Tabs/components/useNavigatorContextMenus'
 
@@ -86,7 +90,7 @@ interface ConversationTabPanel {
 
 const Chat: FC<Props> = (props) => {
   const { conversationTabs, activeConversationTabId, onConversationTabSelect } = props
-  const { assistant, updateTopic } = useAssistant(props.assistant.id)
+  const { assistant, updateAssistant, updateTopic } = useAssistant(props.assistant.id)
   const { assistants } = useAssistants()
   const { t } = useTranslation()
   const { topicPosition, messageStyle, messageNavigation } = useSettings()
@@ -156,6 +160,19 @@ const Chat: FC<Props> = (props) => {
     }
   )
 
+  useShortcut('select_model', async () => {
+    const modelFilter = (m: Model) => !isEmbeddingModel(m) && !isRerankModel(m)
+    const selectedModel = await SelectModelPopup.show({ model: assistant?.model, filter: modelFilter })
+    if (selectedModel) {
+      const enabledWebSearch = isWebSearchModel(selectedModel)
+      updateAssistant({
+        ...props.assistant,
+        model: selectedModel,
+        enableWebSearch: enabledWebSearch && props.assistant.enableWebSearch
+      })
+    }
+  })
+
   const selectConversationTab = useCallback(
     (assistantId: string, topicId: string) => {
       if (`${assistantId}:${topicId}` === activeConversationTabId) {
@@ -182,19 +199,16 @@ const Chat: FC<Props> = (props) => {
       return
     }
 
-    // Extract topicId from renderedConversationTabId (format: "assistantId:topicId")
     const topicId = renderedConversationTabId.split(':')[1]
     if (!topicId) {
       setIsConversationContentPending(false)
       return
     }
 
-    // Check if messages are already loaded for this topic
     const state = store.getState()
     const messagesLoaded = state.messages.messageIdsByTopic[topicId]?.length > 0
     const isLoading = state.messages.loadingByTopic[topicId]
 
-    // Only show loading state if messages aren't cached and we're actually loading
     if (!messagesLoaded || isLoading) {
       setIsConversationContentPending(true)
       setTimeoutTimer(
@@ -553,6 +567,13 @@ const Chat: FC<Props> = (props) => {
     setTimeoutTimer('chat:restoreConversationTabsScroll', restoreConversationTabsScroll, 80)
   }, [conversationTabs.length, restoreConversationTabsScroll, setTimeoutTimer, showConversationTabs])
 
+  useCloseActiveConversationTabShortcut({
+    activeConversationTabId,
+    conversationTabs,
+    enabled: showConversationTabs,
+    onConversationTabClose: props.onConversationTabClose
+  })
+
   useEffect(() => {
     if (!showConversationTabs || conversationTabs.length <= 1) {
       ctrlTabKeyLatchRef.current = false
@@ -775,6 +796,7 @@ const Chat: FC<Props> = (props) => {
                     })}
                   </ConversationTabsContainer>
                 )}
+
                 <div className="flex min-h-0 flex-1 flex-col justify-between">
                   {activeTopicOrSession === 'topic' && (
                     <>
@@ -847,7 +869,9 @@ const Chat: FC<Props> = (props) => {
                         <>
                           <AgentSessionMessages agentId={activeAgentId} sessionId={activeSessionId} />
                           <PinnedTodoPanelWrapper>
-                            <PinnedTodoPanel topicId={buildAgentSessionTopicId(activeSessionId)} />
+                            <NarrowLayout>
+                              <PinnedTodoPanel topicId={buildAgentSessionTopicId(activeSessionId)} />
+                            </NarrowLayout>
                           </PinnedTodoPanelWrapper>
                         </>
                       )}
