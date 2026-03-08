@@ -307,6 +307,10 @@ Several dependencies have patches in `patches/` — be careful when upgrading:
 
 ## Important Notes
 
+### Background Slideshow Paths
+
+- Treat symlinked image files and symlinked subdirectories as normal slideshow sources. When touching background slideshow listing, preserve `followSymlinks` behavior end-to-end so curated symlink folders keep working.
+
 ### V2 Refactoring in Progress
 
 Files marked with the following header are **blocked for feature changes**:

@@ -32,6 +32,8 @@ import { chdir } from 'process'
 import { v4 as uuidv4 } from 'uuid'
 import WordExtractor from 'word-extractor'
 
+import { buildDirectoryListRipgrepArgs, buildFilenameSearchRipgrepArgs } from './fileListRipgrep'
+
 const logger = loggerService.withContext('FileStorage')
 
 // Get ripgrep binary path
@@ -134,6 +136,7 @@ interface DirectoryListOptions {
   maxEntries?: number
   searchPattern?: string
   fuzzy?: boolean
+  followSymlinks?: boolean
 }
 
 const DEFAULT_DIRECTORY_LIST_OPTIONS: Required<DirectoryListOptions> = {
@@ -144,7 +147,8 @@ const DEFAULT_DIRECTORY_LIST_OPTIONS: Required<DirectoryListOptions> = {
   includeDirectories: true,
   maxEntries: 20,
   searchPattern: '.',
-  fuzzy: true
+  fuzzy: true,
+  followSymlinks: false
 }
 
 class FileStorage {
@@ -1001,40 +1005,7 @@ class FileStorage {
 
     // Search for files using ripgrep
     if (options.includeFiles) {
-      const args: string[] = ['--files']
-
-      // Handle hidden files
-      if (!options.includeHidden) {
-        args.push('--glob', '!.*')
-      }
-
-      // Use --iglob to let ripgrep filter filenames (case-insensitive)
-      if (options.searchPattern && options.searchPattern !== '.') {
-        args.push('--iglob', `*${options.searchPattern}*`)
-      }
-
-      // Exclude common hidden directories and large directories
-      args.push('-g', '!**/node_modules/**')
-      args.push('-g', '!**/.git/**')
-      args.push('-g', '!**/.idea/**')
-      args.push('-g', '!**/.vscode/**')
-      args.push('-g', '!**/.DS_Store')
-      args.push('-g', '!**/dist/**')
-      args.push('-g', '!**/build/**')
-      args.push('-g', '!**/.next/**')
-      args.push('-g', '!**/.nuxt/**')
-      args.push('-g', '!**/coverage/**')
-      args.push('-g', '!**/.cache/**')
-
-      // Handle max depth
-      if (!options.recursive) {
-        args.push('--max-depth', '1')
-      } else if (options.maxDepth > 0) {
-        args.push('--max-depth', options.maxDepth.toString())
-      }
-
-      // Add the directory path
-      args.push(resolvedPath)
+      const args = buildFilenameSearchRipgrepArgs(options, resolvedPath)
 
       const { exitCode, output } = await executeRipgrep(args)
 
@@ -1293,36 +1264,7 @@ class FileStorage {
    * Build common ripgrep arguments for file listing
    */
   private buildRipgrepBaseArgs(options: Required<DirectoryListOptions>, resolvedPath: string): string[] {
-    const args: string[] = ['--files']
-
-    // Handle hidden files
-    if (!options.includeHidden) {
-      args.push('--glob', '!.*')
-    }
-
-    // Exclude common hidden directories and large directories
-    args.push('-g', '!**/node_modules/**')
-    args.push('-g', '!**/.git/**')
-    args.push('-g', '!**/.idea/**')
-    args.push('-g', '!**/.vscode/**')
-    args.push('-g', '!**/.DS_Store')
-    args.push('-g', '!**/dist/**')
-    args.push('-g', '!**/build/**')
-    args.push('-g', '!**/.next/**')
-    args.push('-g', '!**/.nuxt/**')
-    args.push('-g', '!**/coverage/**')
-    args.push('-g', '!**/.cache/**')
-
-    // Handle max depth
-    if (!options.recursive) {
-      args.push('--max-depth', '1')
-    } else if (options.maxDepth > 0) {
-      args.push('--max-depth', options.maxDepth.toString())
-    }
-
-    args.push(resolvedPath)
-
-    return args
+    return buildDirectoryListRipgrepArgs(options, resolvedPath)
   }
 
   private async listDirectoryWithRipgrep(

@@ -106,6 +106,7 @@ This README reflects only the new functionality added in this patch series.
 - Added a configurable background slideshow for the chat content area.
 - Settings are available in `Settings -> Display -> Background Slideshow`.
 - Supports multiple image folders, switch interval, opacity, and manual `Next Image`.
+- Symlinked image files and symlinked subdirectories are treated the same as regular entries, so curated link folders work as slideshow sources.
 - Added shortcut `Ctrl/Cmd+Shift+U` to reveal the current background image in folder.
 
 19. Claude Code compatibility mode for Anthropic providers

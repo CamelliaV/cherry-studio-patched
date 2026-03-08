@@ -198,7 +198,8 @@ class BackgroundSlideshowService {
             includeFiles: true,
             includeDirectories: false,
             maxEntries: MAX_DIRECTORY_ENTRIES,
-            searchPattern: '.'
+            searchPattern: '.',
+            followSymlinks: true
           })
         } catch (error) {
           logger.warn(`Failed to list directory for slideshow: ${directory}`, error as Error)

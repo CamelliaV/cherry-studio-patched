@@ -92,6 +92,7 @@ type DirectoryListOptions = {
   includeDirectories?: boolean
   maxEntries?: number
   searchPattern?: string
+  followSymlinks?: boolean
 }
 
 export function tracedInvoke(channel: string, spanContext: SpanContext | undefined, ...args: any[]) {
