@@ -148,6 +148,12 @@ This README reflects only the new functionality added in this patch series.
 - Fixed a layout regression where the conversation header could render while the message viewport collapsed to zero height.
 - The shared message scroller now explicitly stretches to fill the available chat area, preventing the chat body from disappearing.
 
+27. Phase 1 renderer performance groundwork
+- Added dev-only renderer performance monitoring for timings, long tasks, and heap snapshots.
+- Conversation panels now support `active` / `warm` / `cold` lifecycle control, cooling inactive tabs only below 10% available RAM and warming them again only above 15%.
+- Warm inactive tabs now suspend timeline-anchor and token-estimation work while shared message/timeline derivations cut duplicate recomputation on the active path.
+- Added direct timeline jumps with `Alt+Numpad1..9`.
+
 ## Arch Linux Quick Install
 
 ```bash

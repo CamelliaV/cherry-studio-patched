@@ -33,6 +33,7 @@ import styled from 'styled-components'
 import ChatNavbar from './components/ChatNavBar'
 import ConversationLoadingState from './components/ConversationLoadingState'
 import { useCloseActiveConversationTabShortcut } from './hooks/useCloseActiveConversationTabShortcut'
+import { useConversationPanelLifecycle } from './hooks/useConversationPanelLifecycle'
 import AgentSessionInputbar from './Inputbar/AgentSessionInputbar'
 import { PinnedTodoPanel } from './Inputbar/components/PinnedTodoPanel'
 import Inputbar from './Inputbar/Inputbar'
@@ -388,18 +389,22 @@ const Chat: FC<Props> = (props) => {
     // No need to track recent panels anymore since we keep all tabs mounted
   }, [conversationTabPanels])
 
+  const conversationPanelLifecycle = useConversationPanelLifecycle({
+    panels: conversationTabPanels,
+    enabled: activeTopicOrSession === 'topic'
+  })
+
   const renderedConversationPanels = useMemo(() => {
     if (conversationTabPanels.length === 0) {
       return []
     }
 
-    // Keep all conversation tabs mounted for instant switching and scroll position preservation
-    return conversationTabPanels
-  }, [conversationTabPanels])
+    return conversationPanelLifecycle.panels.filter((panel) => panel.shouldMount)
+  }, [conversationPanelLifecycle.panels, conversationTabPanels.length])
 
   const activeConversationPanel = useMemo(
-    () => conversationTabPanels.find((panel) => panel.isActive),
-    [conversationTabPanels]
+    () => conversationPanelLifecycle.panels.find((panel) => panel.isActive),
+    [conversationPanelLifecycle.panels]
   )
   const activeConversationContainerId = useMemo(
     () => (activeConversationPanel ? buildConversationContainerId(activeConversationPanel.id) : 'messages'),
@@ -822,6 +827,7 @@ const Chat: FC<Props> = (props) => {
                             key={panel.id}
                             data-conversation-tab-id={panel.id}
                             data-active={panel.isActive ? 'true' : 'false'}
+                            data-lifecycle={panel.lifecycle}
                             $active={panel.isActive}
                             $switching={isConversationSwitching}
                             $pending={isConversationContentPending}

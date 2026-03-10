@@ -10,7 +10,7 @@ import { autoRenameTopic } from '@renderer/hooks/useTopic'
 import SelectionBox from '@renderer/pages/home/Messages/SelectionBox'
 import { getDefaultTopic } from '@renderer/services/AssistantService'
 import { EVENT_NAMES, EventEmitter } from '@renderer/services/EventService'
-import { getContextCount, getGroupedMessages, getUserMessage } from '@renderer/services/MessagesService'
+import { getContextCount, getUserMessage } from '@renderer/services/MessagesService'
 import { estimateHistoryTokens } from '@renderer/services/TokenService'
 import store, { useAppDispatch } from '@renderer/store'
 import { messageBlocksSelectors, updateOneBlock } from '@renderer/store/messageBlock'
@@ -34,6 +34,7 @@ import { useTranslation } from 'react-i18next'
 
 import MessageAnchorLine from './MessageAnchorLine'
 import MessageGroup from './MessageGroup'
+import { deriveMessageRenderData } from './messageDerivations'
 import NarrowLayout from './NarrowLayout'
 import Prompt from './Prompt'
 import { MessagesContainer, MessagesViewport, ScrollContainer } from './shared'
@@ -120,7 +121,10 @@ const Messages: React.FC<MessagesProps> = ({
       messageElements.current.delete(id)
     }
   }, [])
-  const displayMessages = useMemo(() => [...messages].reverse(), [messages])
+  const { displayMessages, groupedMessages, timelineAnchors } = useMemo(
+    () => deriveMessageRenderData(messages),
+    [messages]
+  )
 
   // NOTE: 如果设置为平滑滚动会导致滚动条无法跟随生成的新消息保持在底部位置
   const scrollToBottom = useCallback(() => {
@@ -363,20 +367,7 @@ const Messages: React.FC<MessagesProps> = ({
     requestAnimationFrame(() => onComponentUpdate?.())
   }, [isActive, onComponentUpdate])
 
-  // NOTE: 因为displayMessages是倒序的，所以得到的groupedMessages每个group内部也是倒序的，需要再倒一遍
-  const groupedMessages = useMemo(() => {
-    return Object.entries(getGroupedMessages(displayMessages)).map(
-      ([key, group]) =>
-        [key, group.toReversed()] as [
-          string,
-          (Message & {
-            index: number
-          })[]
-        ]
-    )
-  }, [displayMessages])
-
-  const showMessageAnchor = displayMessages.length <= MAX_ANCHOR_LINE_MESSAGES
+  const showMessageAnchor = isActive && displayMessages.length <= MAX_ANCHOR_LINE_MESSAGES
 
   return (
     <MessagesViewport>
@@ -414,6 +405,7 @@ const Messages: React.FC<MessagesProps> = ({
       {showMessageAnchor && (
         <MessageAnchorLine
           messages={displayMessages}
+          timelineAnchors={timelineAnchors}
           persistKey={`topic-${topic.id}`}
           containerId={messagesContainerId}
           isActive={isActive}

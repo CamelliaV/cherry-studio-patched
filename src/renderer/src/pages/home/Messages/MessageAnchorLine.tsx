@@ -1,22 +1,18 @@
 import type { Message } from '@renderer/types/newMessage'
 import { scrollIntoView } from '@renderer/utils/dom'
-import { getMainTextContent } from '@renderer/utils/messageUtils/find'
 import { type FC, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useTranslation } from 'react-i18next'
 import styled from 'styled-components'
 
+import { deriveTimelineAnchorsFromDisplayMessages, type TimelineAnchor } from './messageDerivations'
+
 interface MessageLineProps {
   messages: Message[]
+  timelineAnchors?: TimelineAnchor[]
   persistKey?: string
   containerId?: string
   isActive?: boolean
-}
-
-interface TimelineAnchor {
-  id: string
-  userPreview: string
-  assistantPreview: string
 }
 
 interface AnchorPosition {
@@ -24,8 +20,6 @@ interface AnchorPosition {
   top: number
 }
 
-const MAX_USER_PREVIEW_LENGTH = 44
-const MAX_ASSISTANT_PREVIEW_LENGTH = 56
 const MAX_RENDERED_ANCHORS = 220
 const PREVIEW_ANCHOR_LIMIT = 260
 // Keep active marker logic aligned with ChatNavigation's visible-threshold behavior.
@@ -58,20 +52,9 @@ const setStoredTimelineIndex = (storageKey: string, index: number) => {
   window.localStorage.setItem(storageKey, String(index))
 }
 
-const normalizePreview = (content: string) => content.replace(/\s+/g, ' ').trim()
-
-const truncatePreview = (content: string, maxLength: number) =>
-  content.length > maxLength ? `${content.slice(0, maxLength)}…` : content
-
-const getMessagePreview = (message: Message | undefined, maxLength: number) => {
-  if (!message) return ''
-  const content = normalizePreview(getMainTextContent(message))
-  if (!content) return ''
-  return truncatePreview(content, maxLength)
-}
-
 const MessageAnchorLine: FC<MessageLineProps> = ({
   messages,
+  timelineAnchors: providedTimelineAnchors,
   persistKey,
   containerId = 'messages',
   isActive = true
@@ -89,35 +72,10 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
     [persistKey]
   )
 
-  const timelineAnchors = useMemo<TimelineAnchor[]>(() => {
-    const nonClearMessages = messages.filter((message) => message.type !== 'clear').toReversed()
-    const userMessages = nonClearMessages.filter((message) => message.role === 'user')
-
-    const assistantPreviewByAskId = new Map<string, string>()
-    nonClearMessages.forEach((message) => {
-      if (message.role !== 'assistant' || !message.askId) {
-        return
-      }
-      const assistantPreview = getMessagePreview(message, MAX_ASSISTANT_PREVIEW_LENGTH)
-      if (assistantPreview) {
-        assistantPreviewByAskId.set(message.askId, assistantPreview)
-      }
-    })
-
-    if (userMessages.length > 0) {
-      return userMessages.map((userMessage) => ({
-        id: userMessage.id,
-        userPreview: getMessagePreview(userMessage, MAX_USER_PREVIEW_LENGTH),
-        assistantPreview: assistantPreviewByAskId.get(userMessage.id) || ''
-      }))
-    }
-
-    return nonClearMessages.map((message) => ({
-      id: message.id,
-      userPreview: message.role === 'user' ? getMessagePreview(message, MAX_USER_PREVIEW_LENGTH) : '',
-      assistantPreview: message.role === 'assistant' ? getMessagePreview(message, MAX_ASSISTANT_PREVIEW_LENGTH) : ''
-    }))
-  }, [messages])
+  const timelineAnchors = useMemo<TimelineAnchor[]>(
+    () => providedTimelineAnchors || deriveTimelineAnchorsFromDisplayMessages(messages),
+    [messages, providedTimelineAnchors]
+  )
 
   const refreshAnchorPositions = useCallback(() => {
     const messagesContainer = document.getElementById(containerId)
@@ -208,6 +166,27 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
     [storageKey]
   )
 
+  const jumpToTimelineIndex = useCallback(
+    (index: number) => {
+      const targetAnchor = timelineAnchors[index]
+      if (!targetAnchor) {
+        return
+      }
+
+      activeAnchorIndexRef.current = index
+      setActiveAnchorId(targetAnchor.id)
+      persistTimelineIndex(index)
+
+      const messageElement = document.getElementById(`message-${targetAnchor.id}`)
+      if (!messageElement) {
+        return
+      }
+
+      scrollIntoView(messageElement, { behavior: 'smooth', block: 'start', container: 'nearest' })
+    },
+    [persistTimelineIndex, timelineAnchors]
+  )
+
   const updateActiveAnchor = useCallback(() => {
     const nearestAnchorIndex = getNearestAnchorIndex()
     if (nearestAnchorIndex === -1) {
@@ -249,17 +228,9 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
         return
       }
 
-      setActiveAnchorId(targetAnchor.id)
-      activeAnchorIndexRef.current = targetIndex
-      persistTimelineIndex(targetIndex)
-      const messageElement = document.getElementById(`message-${targetAnchor.id}`)
-      if (!messageElement) {
-        return
-      }
-
-      scrollIntoView(messageElement, { behavior: 'smooth', block: 'start', container: 'nearest' })
+      jumpToTimelineIndex(targetIndex)
     },
-    [getNearestAnchorIndex, persistTimelineIndex, timelineAnchors]
+    [getNearestAnchorIndex, jumpToTimelineIndex, timelineAnchors]
   )
 
   const jumpToTimelineEdge = useCallback(
@@ -273,18 +244,10 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
         return
       }
 
-      setActiveAnchorId(targetAnchor.id)
       const targetIndex = edge === 'first' ? 0 : timelineAnchors.length - 1
-      activeAnchorIndexRef.current = targetIndex
-      persistTimelineIndex(targetIndex)
-      const messageElement = document.getElementById(`message-${targetAnchor.id}`)
-      if (!messageElement) {
-        return
-      }
-
-      scrollIntoView(messageElement, { behavior: 'smooth', block: 'start', container: 'nearest' })
+      jumpToTimelineIndex(targetIndex)
     },
-    [persistTimelineIndex, timelineAnchors]
+    [jumpToTimelineIndex, timelineAnchors]
   )
 
   useHotkeys(
@@ -338,6 +301,33 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
     },
     [isActive, jumpToTimelineEdge, timelineAnchors.length]
   )
+
+  useEffect(() => {
+    if (!isActive || timelineAnchors.length === 0) {
+      return
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+        return
+      }
+
+      const match = /^Numpad([1-9])$/.exec(event.code)
+      if (!match) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      jumpToTimelineIndex(Number(match[1]) - 1)
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true)
+    }
+  }, [isActive, jumpToTimelineIndex, timelineAnchors.length])
 
   const scheduleActiveAnchorUpdate = useCallback(() => {
     if (updateRafIdRef.current !== null) return
@@ -453,12 +443,6 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
     return () => window.clearTimeout(refreshTimer)
   }, [isActive, timelineAnchors, refreshAnchorPositions, scheduleActiveAnchorUpdate])
 
-  const scrollToAnchor = useCallback((anchor: TimelineAnchor) => {
-    const messageElement = document.getElementById(`message-${anchor.id}`)
-    if (!messageElement) return
-    scrollIntoView(messageElement, { behavior: 'smooth', block: 'start', container: 'nearest' })
-  }, [])
-
   const shouldShowIndex = (index: number, active: boolean) => {
     if (active) return true
     if (timelineAnchors.length <= 28) return true
@@ -539,10 +523,7 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()
-              activeAnchorIndexRef.current = index
-              setActiveAnchorId(anchor.id)
-              persistTimelineIndex(index)
-              scrollToAnchor(anchor)
+              jumpToTimelineIndex(index)
             }}
             aria-label={label}>
             {shouldShowIndex(index, active) && <AnchorIndex>{index + 1}</AnchorIndex>}

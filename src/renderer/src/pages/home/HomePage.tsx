@@ -2,6 +2,7 @@ import { loggerService } from '@logger'
 import { ErrorBoundary } from '@renderer/components/ErrorBoundary'
 import { useAgentSessionInitializer } from '@renderer/hooks/agents/useAgentSessionInitializer'
 import { useAssistants } from '@renderer/hooks/useAssistant'
+import { useRendererPerfMonitor } from '@renderer/hooks/useRendererPerfMonitor'
 import { useRuntime } from '@renderer/hooks/useRuntime'
 import { useNavbarPosition, useSettings } from '@renderer/hooks/useSettings'
 import { useShortcut } from '@renderer/hooks/useShortcuts'
@@ -261,6 +262,8 @@ const writeStoredConversationWorkspacesState = (state: StoredConversationWorkspa
 }
 
 const HomePage: FC = () => {
+  useRendererPerfMonitor()
+
   const { assistants } = useAssistants()
   const navigate = useNavigate()
   const { isLeftNavbar } = useNavbarPosition()

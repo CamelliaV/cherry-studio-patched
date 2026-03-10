@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import { arch } from 'node:os'
+import { arch, availableMemory, freemem, totalmem } from 'node:os'
 import path from 'node:path'
 
 import type { TokenUsageData } from '@cherrystudio/analytics-client'
@@ -527,6 +527,15 @@ export async function registerIpc(mainWindow: BrowserWindow, app: Electron.App) 
   ipcMain.handle(IpcChannel.System_GetDeviceType, getDeviceType)
   ipcMain.handle(IpcChannel.System_GetHostname, getHostname)
   ipcMain.handle(IpcChannel.System_GetCpuName, getCpuName)
+  ipcMain.handle(IpcChannel.System_GetMemoryInfo, () => {
+    const totalBytes = totalmem()
+    const availableBytes = typeof availableMemory === 'function' ? availableMemory() : freemem()
+    return {
+      totalBytes,
+      availableBytes,
+      availableRatio: totalBytes > 0 ? availableBytes / totalBytes : 0
+    }
+  })
   ipcMain.handle(IpcChannel.System_CheckGitBash, () => {
     if (!isWin) {
       return true // Non-Windows systems don't need Git Bash
