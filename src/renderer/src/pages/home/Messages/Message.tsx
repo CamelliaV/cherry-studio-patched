@@ -29,6 +29,7 @@ import MessageErrorBoundary from './MessageErrorBoundary'
 import MessageHeader from './MessageHeader'
 import MessageMenubar from './MessageMenubar'
 import MessageOutline from './MessageOutline'
+import { isMessageRenderEqual } from './renderStability'
 
 interface Props {
   message: Message
@@ -260,6 +261,16 @@ const MessageItem: FC<Props> = ({
   )
 }
 
+const areMessageItemPropsEqual = (previous: Props, next: Props) =>
+  isMessageRenderEqual(previous.message, next.message) &&
+  previous.topic.id === next.topic.id &&
+  previous.topic.name === next.topic.name &&
+  previous.index === next.index &&
+  previous.hideMenuBar === next.hideMenuBar &&
+  previous.isGrouped === next.isGrouped &&
+  previous.isGroupContextMessage === next.isGroupContextMessage &&
+  previous.onUpdateUseful === next.onUpdateUseful
+
 const MessageContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -308,4 +319,4 @@ const NewContextMessage = styled.div<{ isMultiSelectMode: boolean }>`
   ${({ isMultiSelectMode }) => isMultiSelectMode && 'cursor: default;'}
 `
 
-export default memo(MessageItem)
+export default memo(MessageItem, areMessageItemPropsEqual)

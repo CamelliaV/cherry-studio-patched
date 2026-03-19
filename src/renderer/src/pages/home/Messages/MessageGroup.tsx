@@ -18,6 +18,7 @@ import styled from 'styled-components'
 
 import MessageItem from './Message'
 import MessageGroupMenuBar from './MessageGroupMenuBar'
+import { areMessagesForRenderEqual } from './renderStability'
 
 const logger = loggerService.withContext('MessageGroup')
 interface Props {
@@ -424,4 +425,10 @@ const MessageWrapper = styled.div<MessageWrapperProps>`
   }
 `
 
-export default memo(MessageGroup)
+const areMessageGroupPropsEqual = (previous: Props, next: Props) =>
+  previous.topic.id === next.topic.id &&
+  previous.topic.name === next.topic.name &&
+  previous.registerMessageElement === next.registerMessageElement &&
+  areMessagesForRenderEqual(previous.messages, next.messages)
+
+export default memo(MessageGroup, areMessageGroupPropsEqual)

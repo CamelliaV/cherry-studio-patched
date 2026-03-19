@@ -36,7 +36,7 @@ import {
   Terminal,
   X
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
@@ -130,6 +130,8 @@ const TabsContainer: React.FC<TabsContainerProps> = ({ children }) => {
   const { useSystemTitleBar } = useSettings()
   const { t } = useTranslation()
 
+  const initialRestoreDone = useRef(false)
+
   const getTabId = (path: string): string => {
     if (path === '/') return 'home'
     const segments = path.split('/')
@@ -180,6 +182,10 @@ const TabsContainer: React.FC<TabsContainerProps> = ({ children }) => {
   }, [activeTabId, dispatch])
 
   useEffect(() => {
+    if (!initialRestoreDone.current) {
+      return
+    }
+
     const tabId = getTabId(location.pathname)
     const currentTab = tabs.find((tab) => tab.id === tabId)
 
@@ -195,6 +201,16 @@ const TabsContainer: React.FC<TabsContainerProps> = ({ children }) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, location.pathname])
+
+  // One-time restore of persisted active tab on startup
+  useEffect(() => {
+    const activeTab = tabs.find((tab) => tab.id === activeTabId)
+    if (activeTab && activeTab.path !== location.pathname) {
+      navigate(activeTab.path, { replace: true })
+    }
+    initialRestoreDone.current = true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     removeSpecialTabs()

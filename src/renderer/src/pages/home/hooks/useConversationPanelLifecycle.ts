@@ -14,8 +14,7 @@ export interface ConversationPanelLifecycleInput {
   isActive: boolean
 }
 
-export interface ConversationPanelLifecyclePanel<T extends ConversationPanelLifecycleInput>
-  extends ConversationPanelLifecycleInput {
+export interface ConversationPanelLifecyclePanel extends ConversationPanelLifecycleInput {
   lifecycle: ConversationPanelLifecycleState
   shouldMount: boolean
   isInteractive: boolean
@@ -39,7 +38,7 @@ interface UseConversationPanelLifecycleOptions<T extends ConversationPanelLifecy
 interface UseConversationPanelLifecycleResult<T extends ConversationPanelLifecycleInput> {
   isCooling: boolean
   memorySnapshot?: SystemMemorySnapshot
-  panels: Array<T & ConversationPanelLifecyclePanel<T>>
+  panels: Array<T & ConversationPanelLifecyclePanel>
 }
 
 const getDefaultSystemMemorySnapshot = async (): Promise<SystemMemorySnapshot | null> => {
@@ -100,7 +99,10 @@ export function useConversationPanelLifecycle<T extends ConversationPanelLifecyc
         )
       } catch (error) {
         if (!cancelled) {
-          logger.warn('Failed to refresh system memory snapshot', error)
+          logger.warn(
+            'Failed to refresh system memory snapshot',
+            error instanceof Error ? error : { error }
+          )
         }
       }
     }

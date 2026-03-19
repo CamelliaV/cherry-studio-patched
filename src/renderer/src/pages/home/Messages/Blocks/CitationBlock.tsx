@@ -14,9 +14,9 @@ import CitationsList from '../CitationsList'
 function CitationBlock({ block }: { block: CitationMessageBlock }) {
   const { t } = useTranslation()
   const formattedCitations = useSelector((state: RootState) => selectFormattedCitationsByBlockId(state, block.id))
-  const { websearch } = useSelector((state: RootState) => state.runtime)
-  const message = useSelector((state: RootState) => state.messages.entities[block.messageId])
-  const userMessageId = message?.askId || block.messageId // 如果没有 askId 则回退到 messageId
+  const activeSearches = useSelector((state: RootState) => state.runtime.websearch.activeSearches)
+  const askId = useSelector((state: RootState) => state.messages.entities[block.messageId]?.askId)
+  const userMessageId = askId || block.messageId
 
   const hasGeminiBlock = block.response?.source === WEB_SEARCH_SOURCE.GEMINI
   const hasCitations = useMemo(() => {
@@ -29,7 +29,7 @@ function CitationBlock({ block }: { block: CitationMessageBlock }) {
   }, [formattedCitations, block.knowledge, block.memories, hasGeminiBlock])
 
   const getWebSearchStatusText = (requestId: string) => {
-    const status = websearch.activeSearches[requestId] ?? { phase: 'default' }
+    const status = activeSearches[requestId] ?? { phase: 'default' }
 
     switch (status.phase) {
       case 'fetch_complete':

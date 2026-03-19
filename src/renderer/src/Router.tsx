@@ -2,7 +2,7 @@ import '@renderer/databases'
 
 import type { FC } from 'react'
 import { useMemo } from 'react'
-import { HashRouter, Route, Routes } from 'react-router-dom'
+import { HashRouter, Route, Routes, useLocation } from 'react-router-dom'
 
 import Sidebar from './components/app/Sidebar'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -23,14 +23,36 @@ import SettingsPage from './pages/settings/SettingsPage'
 import AssistantPresetsPage from './pages/store/assistants/presets/AssistantPresetsPage'
 import TranslatePage from './pages/translate/TranslatePage'
 
+/**
+ * Always-mounted HomePage wrapper. Shows/hides via CSS so that navigating
+ * to Settings (or other pages) does not unmount the chat, preserving
+ * scroll position, streaming state, and all local component state.
+ */
+const HomePageKeepAlive: FC = () => {
+  const location = useLocation()
+  const isHome = location.pathname === '/'
+
+  return (
+    <div
+      style={{
+        display: isHome ? 'flex' : 'none',
+        flex: 1,
+        width: '100%',
+        height: '100%'
+      }}>
+      <HomePage />
+    </div>
+  )
+}
+
 const Router: FC = () => {
   const { navbarPosition } = useNavbarPosition()
 
+  // HomePage is kept alive separately — no Route for "/"
   const routes = useMemo(() => {
     return (
       <ErrorBoundary>
         <Routes>
-          <Route path="/" element={<HomePage />} />
           <Route path="/store" element={<AssistantPresetsPage />} />
           <Route path="/paintings/*" element={<PaintingsRoutePage />} />
           <Route path="/translate" element={<TranslatePage />} />
@@ -52,6 +74,7 @@ const Router: FC = () => {
     return (
       <HashRouter>
         <Sidebar />
+        <HomePageKeepAlive />
         {routes}
         <NavigationHandler />
       </HashRouter>
@@ -61,7 +84,10 @@ const Router: FC = () => {
   return (
     <HashRouter>
       <NavigationHandler />
-      <TabsContainer>{routes}</TabsContainer>
+      <TabsContainer>
+        <HomePageKeepAlive />
+        {routes}
+      </TabsContainer>
     </HashRouter>
   )
 }

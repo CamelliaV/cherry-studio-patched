@@ -154,6 +154,12 @@ This README reflects only the new functionality added in this patch series.
 - Warm inactive tabs now suspend timeline-anchor and token-estimation work while shared message/timeline derivations cut duplicate recomputation on the active path.
 - Added direct timeline jumps with `Alt+Numpad1..9`.
 
+28. Chat route persistence and render-stability hardening
+- The home chat route now stays mounted when navigating to settings and other pages, preserving stream state, scroll state, and local conversation UI state on return.
+- Startup now restores the persisted active tab before route-sync side effects run, while tab state is kept in persisted Redux storage.
+- Large streaming markdown blocks now defer heavy render work more aggressively, and several message/block selectors were stabilized to cut redundant rerenders across chat, timeline, outline, and menubar surfaces.
+- Reloaded conversations now normalize stale block statuses left behind by interrupted streams, and timeline anchors visually mark failed assistant replies without overriding saved scroll restoration.
+
 ## Arch Linux Quick Install
 
 ```bash

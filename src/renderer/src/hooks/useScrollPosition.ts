@@ -11,6 +11,20 @@ const parseScrollPosition = (value: unknown): number | null => {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+export const buildScrollPositionStorageKey = (key: string) => `scroll:${key}`
+
+export const readSavedScrollPosition = (key: string): number | null => {
+  const scrollKey = buildScrollPositionStorageKey(key)
+  const savedFromKeyv = parseScrollPosition(window.keyv?.get(scrollKey))
+  if (savedFromKeyv !== null) {
+    return savedFromKeyv
+  }
+
+  return parseScrollPosition(window.localStorage.getItem(scrollKey))
+}
+
+export const hasSavedScrollPosition = (key: string) => readSavedScrollPosition(key) !== null
+
 /**
  * A custom hook that manages scroll position persistence for a container element
  * @param key - A unique identifier used to store/retrieve the scroll position
@@ -20,7 +34,7 @@ const parseScrollPosition = (value: unknown): number | null => {
  */
 export default function useScrollPosition(key: string, throttleWait?: number, isActive: boolean = true) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const scrollKey = useMemo(() => `scroll:${key}`, [key])
+  const scrollKey = useMemo(() => buildScrollPositionStorageKey(key), [key])
   const scrollKeyRef = useRef(scrollKey)
   const restoredScrollKeyRef = useRef<string | null>(null)
   const userInteractedRef = useRef(false)
@@ -36,18 +50,11 @@ export default function useScrollPosition(key: string, throttleWait?: number, is
     restoreTimerKeys.forEach((timerKey) => clearTimeoutTimer(timerKey))
   }, [clearTimeoutTimer, restoreTimerKeys])
 
-  const readSavedScrollPosition = useCallback(() => {
-    const savedFromKeyv = parseScrollPosition(window.keyv.get(scrollKey))
-    if (savedFromKeyv !== null) {
-      return savedFromKeyv
-    }
-
-    return parseScrollPosition(window.localStorage.getItem(scrollKey))
-  }, [scrollKey])
+  const readPersistedScrollPosition = useCallback(() => readSavedScrollPosition(key), [key])
 
   const persistScrollPosition = useCallback(() => {
     const position = containerRef.current?.scrollTop ?? 0
-    window.keyv.set(scrollKeyRef.current, position)
+    window.keyv?.set(scrollKeyRef.current, position)
     window.localStorage.setItem(scrollKeyRef.current, String(position))
   }, [])
 
@@ -57,7 +64,7 @@ export default function useScrollPosition(key: string, throttleWait?: number, is
         () => {
           const position = containerRef.current?.scrollTop ?? 0
           window.requestAnimationFrame(() => {
-            window.keyv.set(scrollKeyRef.current, position)
+            window.keyv?.set(scrollKeyRef.current, position)
             window.localStorage.setItem(scrollKeyRef.current, String(position))
           })
         },
@@ -89,7 +96,7 @@ export default function useScrollPosition(key: string, throttleWait?: number, is
     }
     restoredScrollKeyRef.current = scrollKey
 
-    const savedPosition = readSavedScrollPosition()
+    const savedPosition = readPersistedScrollPosition()
     if (savedPosition === null) {
       return
     }
@@ -104,7 +111,7 @@ export default function useScrollPosition(key: string, throttleWait?: number, is
   }, [
     clearRestoreTimers,
     isActive,
-    readSavedScrollPosition,
+    readPersistedScrollPosition,
     restoreScrollPosition,
     restoreTimerKeys,
     scrollKey,

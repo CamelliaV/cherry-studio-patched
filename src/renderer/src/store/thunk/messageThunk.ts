@@ -1972,8 +1972,35 @@ export const loadTopicMessagesThunk =
       })
 
       // Update Redux state with fetched data
-      if (blocks.length > 0) {
-        dispatch(upsertManyBlocks(blocks))
+      // Normalize stale block statuses: blocks can remain in STREAMING/PROCESSING
+      // if the app was closed during an active stream. When the parent message has
+      // already completed (SUCCESS), these block statuses are artifacts.
+      const completedMessageIds = new Set(
+        messages
+          .filter((m) => m.status === AssistantMessageStatus.SUCCESS || m.role === 'user')
+          .map((m) => m.id)
+      )
+
+      let hasStaleBlocks = false
+      const normalizedBlocks = blocks.map((block) => {
+        if (
+          completedMessageIds.has(block.messageId) &&
+          (block.status === MessageBlockStatus.STREAMING ||
+            block.status === MessageBlockStatus.PROCESSING ||
+            block.status === MessageBlockStatus.PENDING)
+        ) {
+          hasStaleBlocks = true
+          return { ...block, status: MessageBlockStatus.SUCCESS }
+        }
+        return block
+      })
+
+      if (hasStaleBlocks) {
+        logger.info('Normalized stale block statuses for completed messages', { topicId })
+      }
+
+      if (normalizedBlocks.length > 0) {
+        dispatch(upsertManyBlocks(normalizedBlocks))
       }
       dispatch(newMessagesActions.messagesReceived({ topicId, messages }))
     } catch (error) {

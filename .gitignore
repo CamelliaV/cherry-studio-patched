@@ -46,6 +46,10 @@ stats.html
 
 # Local
 local
+.cache/
+.pnpm-store/
+.tmp/
+.SRCINFO
 .aider*
 .cursorrules
 .cursor/*
@@ -78,3 +82,4 @@ YOUR_MEMORY_FILE_PATH
 agent-notes/
 pkgbuilds/**/src/
 pkgbuilds/**/pkg/
+pkgbuilds/**/cherry-studio-patched-local-*.pkg.tar.zst

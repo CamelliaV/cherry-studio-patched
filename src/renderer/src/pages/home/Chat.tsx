@@ -43,6 +43,7 @@ import Messages from './Messages/Messages'
 import NarrowLayout from './Messages/NarrowLayout'
 import Tabs from './Tabs'
 import { useNavigatorContextMenus } from './Tabs/components/useNavigatorContextMenus'
+import { shouldShowConversationContentPending } from './chatPendingState'
 
 const logger = loggerService.withContext('Chat')
 const CONVERSATION_TABS_HEIGHT = 54
@@ -210,7 +211,7 @@ const Chat: FC<Props> = (props) => {
     const messagesLoaded = state.messages.messageIdsByTopic[topicId]?.length > 0
     const isLoading = state.messages.loadingByTopic[topicId]
 
-    if (!messagesLoaded || isLoading) {
+    if (shouldShowConversationContentPending({ messagesLoaded, isLoading })) {
       setIsConversationContentPending(true)
       setTimeoutTimer(
         'chat:conversationContentPending',
@@ -505,7 +506,7 @@ const Chat: FC<Props> = (props) => {
       const isLoading = state.messages.loadingByTopic[topicId]
 
       // Only show switching overlay if content needs to load
-      if (!messagesLoaded || isLoading) {
+      if (shouldShowConversationContentPending({ messagesLoaded, isLoading })) {
         setIsConversationSwitching(true)
         setTimeoutTimer(
           'chat:conversationSwitchAnimation',

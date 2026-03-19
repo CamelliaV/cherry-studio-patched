@@ -16,7 +16,17 @@ import type {
 import { removeSvgEmptyLines } from '@renderer/utils/formats'
 import { processLatexBrackets } from '@renderer/utils/markdown'
 import { isEmpty } from 'lodash'
-import { type FC, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type FC,
+  memo,
+  startTransition,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown, { type Components, defaultUrlTransform } from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
@@ -35,6 +45,7 @@ import MarkdownSvgRenderer from './MarkdownSvgRenderer'
 import rehypeHeadingIds from './plugins/rehypeHeadingIds'
 import rehypeScalableSvg from './plugins/rehypeScalableSvg'
 import remarkDisableConstructs from './plugins/remarkDisableConstructs'
+import { getMarkdownStreamingPolicy } from './streamingPolicy'
 import Table from './Table'
 
 const ALLOWED_ELEMENTS =
@@ -51,6 +62,10 @@ interface Props {
 const Markdown: FC<Props> = ({ block, postProcess }) => {
   const { t } = useTranslation()
   const { mathEngine, mathEnableSingleDollar } = useSettings()
+  const streamingPolicy = useMemo(
+    () => getMarkdownStreamingPolicy(block.status, block.content.length),
+    [block.content.length, block.status]
+  )
 
   const isTrulyDone = 'status' in block && block.status === 'success'
   const [displayedContent, setDisplayedContent] = useState(postProcess ? postProcess(block.content) : block.content)
@@ -61,12 +76,16 @@ const Markdown: FC<Props> = ({ block, postProcess }) => {
 
   const { addChunk, reset } = useSmoothStream({
     onUpdate: (rawText) => {
-      // 如果提供了后处理函数就调用，否则直接使用原始文本
       const finalText = postProcess ? postProcess(rawText) : rawText
-      setDisplayedContent(finalText)
+      if (streamingPolicy.deferStateUpdates) {
+        startTransition(() => setDisplayedContent(finalText))
+      } else {
+        setDisplayedContent(finalText)
+      }
     },
     streamDone: isStreamDone,
-    initialText: block.content
+    initialText: block.content,
+    minDelay: streamingPolicy.minDelay
   })
 
   useEffect(() => {
@@ -113,10 +132,22 @@ const Markdown: FC<Props> = ({ block, postProcess }) => {
     }
     return removeSvgEmptyLines(processLatexBrackets(displayedContent))
   }, [block, displayedContent, t])
+  const deferredMessageContent = useDeferredValue(messageContent)
+  const renderedContent = streamingPolicy.deferMarkdownRender ? deferredMessageContent : messageContent
+
+  // Track whether HTML elements have appeared — once true it stays true,
+  // so the rehypePlugins array doesn't churn on every content update.
+  const hasHtmlElementsRef = useRef(false)
+  if (!hasHtmlElementsRef.current && ALLOWED_ELEMENTS.test(renderedContent)) {
+    hasHtmlElementsRef.current = true
+  }
+  const hasHtmlElements = hasHtmlElementsRef.current
+
+  const hasStyleTag = /<style\b[^>]*>/i.test(renderedContent)
 
   const rehypePlugins = useMemo(() => {
     const plugins: Pluggable[] = []
-    if (ALLOWED_ELEMENTS.test(messageContent)) {
+    if (hasHtmlElements) {
       plugins.push(rehypeRaw, rehypeScalableSvg)
     }
     plugins.push([rehypeHeadingIds, { prefix: `heading-${block.id}` }])
@@ -126,10 +157,10 @@ const Markdown: FC<Props> = ({ block, postProcess }) => {
       plugins.push(rehypeMathjax)
     }
     return plugins
-  }, [mathEngine, messageContent, block.id])
+  }, [mathEngine, hasHtmlElements, block.id])
 
   const components = useMemo(() => {
-    return {
+    const result: Partial<Components> = {
       a: (props: any) => <Link {...props} />,
       code: (props: any) => <CodeBlock {...props} blockId={block.id} />,
       table: (props: any) => <Table {...props} blockId={block.id} />,
@@ -141,12 +172,12 @@ const Markdown: FC<Props> = ({ block, postProcess }) => {
         return <p {...props} />
       },
       svg: MarkdownSvgRenderer
-    } as Partial<Components>
-  }, [block.id])
-
-  if (/<style\b[^>]*>/i.test(messageContent)) {
-    components.style = MarkdownShadowDOMRenderer as any
-  }
+    }
+    if (hasStyleTag) {
+      result.style = MarkdownShadowDOMRenderer as any
+    }
+    return result
+  }, [block.id, hasStyleTag])
 
   const urlTransform = useCallback((value: string) => {
     if (value.startsWith('data:image/png') || value.startsWith('data:image/jpeg')) return value
@@ -166,7 +197,7 @@ const Markdown: FC<Props> = ({ block, postProcess }) => {
           footnoteLabelTagName: 'h4',
           footnoteBackContent: ' '
         }}>
-        {messageContent}
+        {renderedContent}
       </ReactMarkdown>
     </div>
   )

@@ -16,75 +16,81 @@ export const useSmoothStream = ({ onUpdate, streamDone, minDelay = 10, initialTe
   const displayedTextRef = useRef<string>(initialText)
   const lastUpdateTimeRef = useRef<number>(0)
 
+  // Keep mutable refs for values that change frequently so that renderLoop
+  // does not need to be recreated (and the useEffect does not restart the
+  // rAF chain) on every React re-render.
+  const onUpdateRef = useRef(onUpdate)
+  onUpdateRef.current = onUpdate
+  const streamDoneRef = useRef(streamDone)
+  streamDoneRef.current = streamDone
+  const minDelayRef = useRef(minDelay)
+  minDelayRef.current = minDelay
+
   const addChunk = useCallback((chunk: string) => {
     const chars = Array.from(segmenter.segment(chunk)).map((s) => s.segment)
-    chunkQueueRef.current = [...chunkQueueRef.current, ...(chars || [])]
+    chunkQueueRef.current.push(...chars)
   }, [])
 
-  const reset = useCallback(
-    (newText = '') => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
-      chunkQueueRef.current = []
-      displayedTextRef.current = newText
-      onUpdate(newText)
-    },
-    [onUpdate]
-  )
+  // renderLoop has no deps that change during streaming, so the useEffect
+  // below only sets up a *single* rAF chain for the component's lifetime.
+  const renderLoop = useCallback((currentTime: number) => {
+    const done = streamDoneRef.current
+    const queue = chunkQueueRef.current
 
-  const renderLoop = useCallback(
-    (currentTime: number) => {
-      // 1. 如果队列为空
-      if (chunkQueueRef.current.length === 0) {
-        // 如果流已结束，确保显示最终状态并停止循环
-        if (streamDone) {
-          const finalText = displayedTextRef.current
-          onUpdate(finalText)
-          return
-        }
-        // 如果流还没结束但队列空了，等待下一帧
-        animationFrameRef.current = requestAnimationFrame(renderLoop)
+    // 1. Queue empty
+    if (queue.length === 0) {
+      if (done) {
+        // Stream finished — flush final text and stop.
+        onUpdateRef.current(displayedTextRef.current)
         return
       }
+      // Stream still active but nothing queued yet — wait for next frame.
+      animationFrameRef.current = requestAnimationFrame(renderLoop)
+      return
+    }
 
-      // 2. 时间控制，确保最小延迟
-      if (currentTime - lastUpdateTimeRef.current < minDelay) {
-        animationFrameRef.current = requestAnimationFrame(renderLoop)
-        return
-      }
-      lastUpdateTimeRef.current = currentTime
+    // 2. Enforce minimum delay between updates
+    if (currentTime - lastUpdateTimeRef.current < minDelayRef.current) {
+      animationFrameRef.current = requestAnimationFrame(renderLoop)
+      return
+    }
+    lastUpdateTimeRef.current = currentTime
 
-      // 3. 动态计算本次渲染的字符数
-      let charsToRenderCount = Math.max(1, Math.floor(chunkQueueRef.current.length / 5))
+    // 3. Calculate how many characters to render this frame
+    let charsToRenderCount = Math.max(1, Math.floor(queue.length / 5))
 
-      // 如果流已结束，一次性渲染所有剩余字符
-      if (streamDone) {
-        charsToRenderCount = chunkQueueRef.current.length
-      }
+    // If stream is done, flush everything at once
+    if (done) {
+      charsToRenderCount = queue.length
+    }
 
-      const charsToRender = chunkQueueRef.current.slice(0, charsToRenderCount)
-      displayedTextRef.current += charsToRender.join('')
+    const charsToRender = queue.slice(0, charsToRenderCount)
+    displayedTextRef.current += charsToRender.join('')
 
-      // 4. 立即更新UI
-      onUpdate(displayedTextRef.current)
+    // 4. Update UI
+    onUpdateRef.current(displayedTextRef.current)
 
-      // 5. 更新队列
-      chunkQueueRef.current = chunkQueueRef.current.slice(charsToRenderCount)
+    // 5. Advance the queue
+    chunkQueueRef.current = queue.slice(charsToRenderCount)
 
-      // 6. 如果还有内容需要渲染，继续下一帧
-      if (chunkQueueRef.current.length > 0) {
-        animationFrameRef.current = requestAnimationFrame(renderLoop)
-      }
-    },
-    [streamDone, onUpdate, minDelay]
-  )
+    // 6. Continue the loop while content remains or stream is still active
+    if (chunkQueueRef.current.length > 0 || !done) {
+      animationFrameRef.current = requestAnimationFrame(renderLoop)
+    }
+  }, [])
+
+  const reset = useCallback((newText = '') => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+    }
+    chunkQueueRef.current = []
+    displayedTextRef.current = newText
+    onUpdateRef.current(newText)
+  }, [])
 
   useEffect(() => {
-    // 启动渲染循环
     animationFrameRef.current = requestAnimationFrame(renderLoop)
 
-    // 组件卸载时清理
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)

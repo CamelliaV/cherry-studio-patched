@@ -1,3 +1,4 @@
+import { hasSavedScrollPosition } from '@renderer/hooks/useScrollPosition'
 import type { Message } from '@renderer/types/newMessage'
 import { scrollIntoView } from '@renderer/utils/dom'
 import { type FC, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -349,6 +350,11 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
         return
       }
 
+      if (persistKey && hasSavedScrollPosition(persistKey)) {
+        hasRestoredRef.current = true
+        return
+      }
+
       const storedIndex = getStoredTimelineIndex(storageKey)
       if (storedIndex === undefined) {
         hasRestoredRef.current = true
@@ -380,7 +386,7 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
       setActiveAnchorId(targetAnchor.id)
       scrollIntoView(messageElement, { behavior: 'auto', block: 'start', container: 'nearest' })
     },
-    [isActive, storageKey, timelineAnchors]
+    [isActive, persistKey, storageKey, timelineAnchors]
   )
 
   useEffect(() => {
@@ -515,6 +521,8 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
             key={anchor.id}
             type="button"
             $active={active}
+            $hasFailure={anchor.hasFailure}
+            data-has-failure={anchor.hasFailure ? 'true' : 'false'}
             style={{ top }}
             title={tooltipTitle}
             onMouseEnter={() => setHoveredAnchorId(anchor.id)}
@@ -526,7 +534,11 @@ const MessageAnchorLine: FC<MessageLineProps> = ({
               jumpToTimelineIndex(index)
             }}
             aria-label={label}>
-            {shouldShowIndex(index, active) && <AnchorIndex>{index + 1}</AnchorIndex>}
+            {shouldShowIndex(index, active) && (
+              <AnchorIndex $active={active} $hasFailure={anchor.hasFailure}>
+                {index + 1}
+              </AnchorIndex>
+            )}
             {showPreview && (
               <AnchorPreview>
                 {anchor.userPreview && (
@@ -594,7 +606,7 @@ const AnchorTrack = styled.div`
   border-radius: 999px;
 `
 
-const AnchorButton = styled.button<{ $active: boolean }>`
+const AnchorButton = styled.button<{ $active: boolean; $hasFailure: boolean }>`
   position: absolute;
   left: 50%;
   z-index: 1;
@@ -605,13 +617,24 @@ const AnchorButton = styled.button<{ $active: boolean }>`
   border: 1px solid
     ${(props) =>
       props.$active
-        ? 'color-mix(in srgb, var(--color-primary) 76%, transparent)'
-        : 'color-mix(in srgb, var(--color-border) 66%, transparent)'};
+        ? `color-mix(in srgb, ${props.$hasFailure ? 'var(--color-error)' : 'var(--color-primary)'} 76%, transparent)`
+        : props.$hasFailure
+          ? 'color-mix(in srgb, var(--color-error) 72%, transparent)'
+          : 'color-mix(in srgb, var(--color-border) 66%, transparent)'};
   background: ${(props) =>
     props.$active
-      ? 'radial-gradient(circle at 35% 30%, #fff 0%, color-mix(in srgb, var(--color-primary) 82%, #fff) 26%, var(--color-primary) 76% 100%)'
-      : 'color-mix(in srgb, var(--color-background) 55%, transparent)'};
-  box-shadow: ${(props) => (props.$active ? '0 0 0 2px color-mix(in srgb, var(--color-primary) 24%, transparent)' : 'none')};
+      ? props.$hasFailure
+        ? 'radial-gradient(circle at 35% 30%, #fff 0%, color-mix(in srgb, var(--color-error) 82%, #fff) 26%, var(--color-error) 76% 100%)'
+        : 'radial-gradient(circle at 35% 30%, #fff 0%, color-mix(in srgb, var(--color-primary) 82%, #fff) 26%, var(--color-primary) 76% 100%)'
+      : props.$hasFailure
+        ? 'color-mix(in srgb, var(--color-error) 24%, transparent)'
+        : 'color-mix(in srgb, var(--color-background) 55%, transparent)'};
+  box-shadow: ${(props) =>
+    props.$active
+      ? `0 0 0 2px color-mix(in srgb, ${props.$hasFailure ? 'var(--color-error)' : 'var(--color-primary)'} 24%, transparent)`
+      : props.$hasFailure
+        ? '0 0 0 1px color-mix(in srgb, var(--color-error) 14%, transparent)'
+        : 'none'};
   color: ${(props) => (props.$active ? '#fff' : 'var(--color-text-3)')};
   cursor: pointer;
   pointer-events: auto;
@@ -628,16 +651,20 @@ const AnchorButton = styled.button<{ $active: boolean }>`
 
   &:hover {
     transform: translate(-50%, -50%) scale(1.12);
-    border-color: color-mix(in srgb, var(--color-primary) 78%, transparent);
-    background: color-mix(in srgb, var(--color-primary) 32%, transparent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 18%, transparent);
+    border-color: ${(props) =>
+      `color-mix(in srgb, ${props.$hasFailure ? 'var(--color-error)' : 'var(--color-primary)'} 78%, transparent)`};
+    background: ${(props) =>
+      `color-mix(in srgb, ${props.$hasFailure ? 'var(--color-error)' : 'var(--color-primary)'} 32%, transparent)`};
+    box-shadow: ${(props) =>
+      `0 0 0 2px color-mix(in srgb, ${props.$hasFailure ? 'var(--color-error)' : 'var(--color-primary)'} 18%, transparent)`};
   }
 `
 
-const AnchorIndex = styled.span`
+const AnchorIndex = styled.span<{ $active: boolean; $hasFailure: boolean }>`
   font-size: 7px;
   font-weight: 600;
   line-height: 1;
+  color: ${(props) => (props.$active ? '#fff' : props.$hasFailure ? 'var(--color-error)' : 'var(--color-text-3)')};
   text-shadow: 0 1px 2px color-mix(in srgb, #000 35%, transparent);
 `
 

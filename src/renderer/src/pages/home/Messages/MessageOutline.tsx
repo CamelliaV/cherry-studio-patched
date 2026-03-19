@@ -1,6 +1,5 @@
 import Scrollbar from '@renderer/components/Scrollbar'
 import type { RootState } from '@renderer/store'
-import { messageBlocksSelectors } from '@renderer/store/messageBlock'
 import type { Message } from '@renderer/types/newMessage'
 import { MessageBlockType } from '@renderer/types/newMessage'
 import { scrollIntoView } from '@renderer/utils/dom'
@@ -13,6 +12,7 @@ import { unified } from 'unified'
 import { visit } from 'unist-util-visit'
 
 import { createSlugger, extractTextFromNode } from '../Markdown/plugins/rehypeHeadingIds'
+import { areMessageBlockListsEqual, makeSelectMessageBlocksByIds } from './renderStability'
 
 interface MessageOutlineProps {
   message: Message
@@ -25,13 +25,14 @@ interface HeadingItem {
 }
 
 const MessageOutline: FC<MessageOutlineProps> = ({ message }) => {
-  const blockEntities = useSelector((state: RootState) => messageBlocksSelectors.selectEntities(state))
+  const selectBlocksByIds = useMemo(makeSelectMessageBlocksByIds, [])
+  const mainTextBlocks = useSelector(
+    (state: RootState) =>
+      selectBlocksByIds(state, message.blocks).filter((block) => block.type === MessageBlockType.MAIN_TEXT),
+    areMessageBlockListsEqual
+  )
 
   const headings: HeadingItem[] = useMemo(() => {
-    const mainTextBlocks = message.blocks
-      .map((blockId) => blockEntities[blockId])
-      .filter((b) => b?.type === MessageBlockType.MAIN_TEXT)
-
     if (!mainTextBlocks?.length) return []
 
     const result: HeadingItem[] = []
@@ -62,7 +63,7 @@ const MessageOutline: FC<MessageOutlineProps> = ({ message }) => {
     })
 
     return result
-  }, [message.blocks, blockEntities])
+  }, [mainTextBlocks])
 
   const miniLevel = useMemo(() => {
     return headings.length ? Math.min(...headings.map((heading) => heading.level)) : 1

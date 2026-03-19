@@ -25,7 +25,7 @@ import { selectMessagesForTopic } from '@renderer/store/newMessage'
 import { removeBlocksThunk } from '@renderer/store/thunk/messageThunk'
 import { TraceIcon } from '@renderer/trace/pages/Component'
 import type { Assistant, Model, Topic, TranslateLanguage } from '@renderer/types'
-import { type Message, MessageBlockStatus, MessageBlockType } from '@renderer/types/newMessage'
+import { type Message, type MessageBlock, MessageBlockStatus, MessageBlockType } from '@renderer/types/newMessage'
 import { captureScrollableAsBlob, captureScrollableAsDataURL, classNames } from '@renderer/utils'
 import { abortCompletion } from '@renderer/utils/abortController'
 import { copyMessageAsPlainText } from '@renderer/utils/copy'
@@ -73,6 +73,7 @@ import { useSelector } from 'react-redux'
 import styled from 'styled-components'
 
 import MessageTokens from './MessageTokens'
+import { areMessageBlockListsEqual, makeSelectMessageBlocksByIds } from './renderStability'
 
 const createTranslationAbortKey = (messageId: string) => `translation-abort-key:${messageId}`
 
@@ -100,7 +101,6 @@ type MessageOperationsHandlers = ReturnType<typeof useMessageOperations>
 
 type MessageMenubarButtonContext = {
   assistant: Assistant
-  blockEntities: ReturnType<typeof messageBlocksSelectors.selectEntities>
   confirmDeleteMessage: boolean
   confirmRegenerateMessage: boolean
   copied: boolean
@@ -118,6 +118,7 @@ type MessageMenubarButtonContext = {
   isTranslating: boolean
   isUserMessage: boolean
   message: Message
+  messageBlocks: MessageBlock[]
   notesPath: string
   onCopy: (e: React.MouseEvent) => void
   onEdit: () => void | Promise<void>
@@ -230,17 +231,19 @@ const MessageMenubar: FC<Props> = (props) => {
     startEditing(message.id)
   }, [message.id, startEditing])
 
-  const blockEntities = useSelector(messageBlocksSelectors.selectEntities)
+  const selectBlocksByIds = useMemo(makeSelectMessageBlocksByIds, [])
+  const messageBlocks = useSelector(
+    (state: RootState) => selectBlocksByIds(state, message.blocks),
+    areMessageBlockListsEqual
+  )
 
   const isTranslating = useMemo(() => {
-    const translationBlock = message.blocks
-      .map((blockId) => blockEntities[blockId])
-      .find((block) => block?.type === MessageBlockType.TRANSLATION)
+    const translationBlock = messageBlocks.find((block) => block.type === MessageBlockType.TRANSLATION)
     return (
       translationBlock?.status === MessageBlockStatus.STREAMING ||
       translationBlock?.status === MessageBlockStatus.PROCESSING
     )
-  }, [message.blocks, blockEntities])
+  }, [messageBlocks])
 
   const handleTranslate = useCallback(
     async (language: TranslateLanguage) => {
@@ -557,7 +560,6 @@ const MessageMenubar: FC<Props> = (props) => {
 
   const buttonContext: MessageMenubarButtonContext = {
     assistant,
-    blockEntities,
     confirmDeleteMessage,
     confirmRegenerateMessage,
     copied,
@@ -575,6 +577,7 @@ const MessageMenubar: FC<Props> = (props) => {
     isTranslating,
     isUserMessage,
     message,
+    messageBlocks,
     notesPath,
     onCopy,
     onEdit,
@@ -776,7 +779,7 @@ const buttonRenderers: Record<MessageMenubarButtonId, MessageMenubarButtonRender
     handleTranslate,
     hasTranslationBlocks,
     message,
-    blockEntities,
+    messageBlocks,
     removeMessageBlock,
     softHoverBg,
     t
@@ -814,13 +817,11 @@ const buttonRenderers: Record<MessageMenubarButtonId, MessageMenubarButtonRender
               label: '📋 ' + t('common.copy'),
               key: 'translate-copy',
               onClick: () => {
-                const translationBlocks = message.blocks
-                  .map((blockId) => blockEntities[blockId])
-                  .filter((block) => block?.type === 'translation')
+                const translationBlocks = messageBlocks.filter((block) => block.type === MessageBlockType.TRANSLATION)
 
                 if (translationBlocks.length > 0) {
                   const translationContent = translationBlocks
-                    .map((block) => block?.content || '')
+                    .map((block) => block.content || '')
                     .join('\n\n')
                     .trim()
 
@@ -837,10 +838,9 @@ const buttonRenderers: Record<MessageMenubarButtonId, MessageMenubarButtonRender
               label: '✖ ' + t('translate.close'),
               key: 'translate-close',
               onClick: () => {
-                const translationBlocks = message.blocks
-                  .map((blockId) => blockEntities[blockId])
-                  .filter((block) => block?.type === 'translation')
-                  .map((block) => block?.id)
+                const translationBlocks = messageBlocks
+                  .filter((block) => block.type === MessageBlockType.TRANSLATION)
+                  .map((block) => block.id)
 
                 if (translationBlocks.length > 0) {
                   translationBlocks.forEach((blockId) => {
@@ -985,18 +985,17 @@ const buttonRenderers: Record<MessageMenubarButtonId, MessageMenubarButtonRender
       </Tooltip>
     )
   },
-  'inspect-data': ({ message, blockEntities, enableDeveloperMode }) => {
+  'inspect-data': ({ message, messageBlocks, enableDeveloperMode }) => {
     if (!enableDeveloperMode) {
       return null
     }
 
     const handleInspect = (e: React.MouseEvent) => {
       e.stopPropagation()
-      const blocks = message.blocks.map((blockId) => blockEntities[blockId]).filter(Boolean)
       InspectMessagePopup.show({
         title: `Message: ${message.id}`,
         message,
-        blocks
+        blocks: messageBlocks
       })
     }
 

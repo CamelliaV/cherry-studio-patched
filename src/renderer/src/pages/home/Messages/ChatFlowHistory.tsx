@@ -12,7 +12,7 @@ import { EVENT_NAMES, EventEmitter } from '@renderer/services/EventService'
 import type { RootState } from '@renderer/store'
 import { makeSelectMessagesForTopic } from '@renderer/store/newMessage'
 import type { Model } from '@renderer/types'
-import type { Message } from '@renderer/types/newMessage'
+import type { Message, MessageBlock } from '@renderer/types/newMessage'
 import { MessageBlockType } from '@renderer/types/newMessage'
 import { isEmoji } from '@renderer/utils'
 import type { Edge, Node, NodeTypes } from '@xyflow/react'
@@ -24,6 +24,8 @@ import { memo, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSelector } from 'react-redux'
 import styled from 'styled-components'
+
+import { areMessageBlockListsEqual, makeSelectMessageBlocksByIds } from './renderStability'
 
 const LAYOUT = {
   verticalGap: 200,
@@ -75,18 +77,18 @@ const toTimestamp = (time: string): number => {
   return Number.isNaN(parsed) ? 0 : parsed
 }
 
-const getMainTextContentFromBlocks = (
+const getMainTextContentFromResolvedBlocks = (
   message: Message,
-  blockEntities: RootState['messageBlocks']['entities']
+  blocksByMessageId: Map<string, MessageBlock[]>
 ): string => {
-  if (!message.blocks || message.blocks.length === 0) {
+  const blocks = blocksByMessageId.get(message.id)
+  if (!blocks || blocks.length === 0) {
     return ''
   }
 
   const contents: string[] = []
-  for (const blockId of message.blocks) {
-    const block = blockEntities[blockId]
-    if (block && block.type === MessageBlockType.MAIN_TEXT) {
+  for (const block of blocks) {
+    if (block.type === MessageBlockType.MAIN_TEXT) {
       contents.push(block.content)
     }
   }
@@ -398,9 +400,25 @@ const ChatFlowHistory: FC<ChatFlowHistoryProps> = ({ conversationId }) => {
 
   const selectMessagesForCurrentTopic = useMemo(makeSelectMessagesForTopic, [])
   const messages = useSelector((state: RootState) => selectMessagesForCurrentTopic(state, topicId || ''))
-  const blockEntities = useSelector((state: RootState) => state.messageBlocks.entities)
+
+  const allBlockIds = useMemo(() => messages.flatMap((m) => m.blocks), [messages])
+  const selectBlocksByIds = useMemo(makeSelectMessageBlocksByIds, [])
+  const relevantBlocks = useSelector(
+    (state: RootState) => selectBlocksByIds(state, allBlockIds),
+    areMessageBlockListsEqual
+  )
 
   const flowMessages = useMemo<FlowMessage[]>(() => {
+    const blocksByMessageId = new Map<string, MessageBlock[]>()
+    for (const block of relevantBlocks) {
+      const existing = blocksByMessageId.get(block.messageId)
+      if (existing) {
+        existing.push(block)
+      } else {
+        blocksByMessageId.set(block.messageId, [block])
+      }
+    }
+
     const next: FlowMessage[] = []
 
     messages.forEach((message: Message) => {
@@ -412,13 +430,13 @@ const ChatFlowHistory: FC<ChatFlowHistoryProps> = ({ conversationId }) => {
         id: message.id,
         role: message.role,
         createdAtMs: toTimestamp(message.createdAt),
-        content: getMainTextContentFromBlocks(message, blockEntities),
+        content: getMainTextContentFromResolvedBlocks(message, blocksByMessageId),
         model: message.model
       })
     })
 
     return next
-  }, [blockEntities, messages])
+  }, [relevantBlocks, messages])
 
   const flowData = useMemo(
     () => buildConversationFlowData(topicId, flowMessages, userName, userAvatar || null, t),

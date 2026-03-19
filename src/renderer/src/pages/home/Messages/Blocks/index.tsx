@@ -1,7 +1,6 @@
 import { loggerService } from '@logger'
 import { ErrorBoundary } from '@renderer/components/ErrorBoundary'
 import type { RootState } from '@renderer/store'
-import { messageBlocksSelectors } from '@renderer/store/messageBlock'
 import type { ImageMessageBlock, Message, MessageBlock } from '@renderer/types/newMessage'
 import { MessageBlockStatus, MessageBlockType } from '@renderer/types/newMessage'
 import { isMainTextBlock, isMessageProcessing, isToolBlock, isVideoBlock } from '@renderer/utils/messageUtils/is'
@@ -23,6 +22,7 @@ import ToolBlock from './ToolBlock'
 import ToolBlockGroup from './ToolBlockGroup'
 import TranslationBlock from './TranslationBlock'
 import VideoBlock from './VideoBlock'
+import { areMessageBlockListsEqual, makeSelectMessageBlocksByIds } from '../renderStability'
 
 const logger = loggerService.withContext('MessageBlockRenderer')
 
@@ -113,10 +113,8 @@ const groupSimilarBlocks = (blocks: MessageBlock[]): (MessageBlock[] | MessageBl
 }
 
 const MessageBlockRenderer: React.FC<Props> = ({ blocks, message }) => {
-  // 始终调用useSelector，避免条件调用Hook
-  const blockEntities = useSelector((state: RootState) => messageBlocksSelectors.selectEntities(state))
-  // 根据blocks类型处理渲染数据
-  const renderedBlocks = blocks.map((blockId) => blockEntities[blockId]).filter(Boolean)
+  const selectBlocksByIds = useMemo(makeSelectMessageBlocksByIds, [])
+  const renderedBlocks = useSelector((state: RootState) => selectBlocksByIds(state, blocks), areMessageBlockListsEqual)
   const groupedBlocks = useMemo(() => groupSimilarBlocks(renderedBlocks), [renderedBlocks])
 
   // Check if message is still processing
