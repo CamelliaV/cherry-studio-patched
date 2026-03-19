@@ -10,7 +10,6 @@ import { FileText, FolderCog, FolderInput, FolderOpen } from 'lucide-react'
 import type { FC } from 'react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { SettingContainer } from '..'
@@ -29,10 +28,6 @@ import YuqueSettings from './YuqueSettings'
 
 const DataSettings: FC = () => {
   const { t } = useTranslation()
-  const navigate = useNavigate()
-  const [appInfo, setAppInfo] = useState<AppInfo>()
-  const [cacheSize, setCacheSize] = useState<string>('')
-  const { size, removeAllFiles } = useKnowledgeFiles()
   const { theme } = useTheme()
   const [menu, setMenu] = useState<string>('data')
 
@@ -105,114 +100,7 @@ const DataSettings: FC = () => {
         )}
       </MenuList>
       <SettingContainer theme={theme} style={{ display: 'flex', flex: 1, height: '100%' }}>
-        {menu === 'data' && (
-          <>
-            <SettingGroup theme={theme}>
-              <SettingTitle>{t('settings.data.title')}</SettingTitle>
-              <SettingDivider />
-              <SettingRow>
-                <SettingRowTitle>{t('settings.statistics.title')}</SettingRowTitle>
-                <HStack gap="5px" justifyContent="space-between">
-                  <Button onClick={() => navigate('/settings/statistics')}>{t('common.open')}</Button>
-                </HStack>
-              </SettingRow>
-              <SettingRow>
-                <SettingHelpText>{t('settings.statistics.description')}</SettingHelpText>
-              </SettingRow>
-              <SettingDivider />
-              <SettingRow>
-                <SettingRowTitle>{t('settings.general.backup.title')}</SettingRowTitle>
-                <HStack gap="5px" justifyContent="space-between">
-                  <Button onClick={BackupPopup.show} icon={<SaveIcon size={14} />}>
-                    {t('settings.general.backup.button')}
-                  </Button>
-                  <Button onClick={RestorePopup.show} icon={<FolderOpen size={14} />}>
-                    {t('settings.general.restore.button')}
-                  </Button>
-                </HStack>
-              </SettingRow>
-              <SettingDivider />
-              <SettingRow>
-                <SettingRowTitle>{t('settings.data.backup.skip_file_data_title')}</SettingRowTitle>
-                <Switch checked={skipBackupFile} onChange={onSkipBackupFilesChange} />
-              </SettingRow>
-              <SettingRow>
-                <SettingHelpText>{t('settings.data.backup.skip_file_data_help')}</SettingHelpText>
-              </SettingRow>
-              <SettingDivider />
-              <SettingRow>
-                <SettingRowTitle>{t('settings.data.export_to_phone.title')}</SettingRowTitle>
-                <HStack gap="5px" justifyContent="space-between">
-                  <Button onClick={LanTransferPopup.show} icon={<WifiOutlined size={14} />}>
-                    {t('settings.data.export_to_phone.lan.title')}
-                  </Button>
-                </HStack>
-              </SettingRow>
-            </SettingGroup>
-            <SettingGroup theme={theme}>
-              <SettingTitle>{t('settings.data.data.title')}</SettingTitle>
-              <SettingDivider />
-              <SettingRow>
-                <SettingRowTitle>{t('settings.data.app_data.label')}</SettingRowTitle>
-                <PathRow>
-                  <PathText
-                    style={{ color: 'var(--color-text-3)' }}
-                    onClick={() => handleOpenPath(appInfo?.appDataPath)}>
-                    {appInfo?.appDataPath}
-                  </PathText>
-                  <Tooltip title={t('settings.data.app_data.select')}>
-                    <FolderOutput onClick={handleSelectAppDataPath} style={{ cursor: 'pointer' }} size={16} />
-                  </Tooltip>
-                  <HStack gap="5px" style={{ marginLeft: '8px' }}>
-                    <Button onClick={() => handleOpenPath(appInfo?.appDataPath)}>
-                      {t('settings.data.app_data.open')}
-                    </Button>
-                  </HStack>
-                </PathRow>
-              </SettingRow>
-              <SettingDivider />
-              <SettingRow>
-                <SettingRowTitle>{t('settings.data.app_logs.label')}</SettingRowTitle>
-                <PathRow>
-                  <PathText style={{ color: 'var(--color-text-3)' }} onClick={() => handleOpenPath(appInfo?.logsPath)}>
-                    {appInfo?.logsPath}
-                  </PathText>
-                  <HStack gap="5px" style={{ marginLeft: '8px' }}>
-                    <Button onClick={() => handleOpenPath(appInfo?.logsPath)}>
-                      {t('settings.data.app_logs.button')}
-                    </Button>
-                  </HStack>
-                </PathRow>
-              </SettingRow>
-              <SettingDivider />
-              <SettingRow>
-                <SettingRowTitle>{t('settings.data.app_knowledge.label')}</SettingRowTitle>
-                <HStack alignItems="center" gap="5px">
-                  <Button onClick={handleRemoveAllFiles}>{t('settings.data.app_knowledge.button.delete')}</Button>
-                </HStack>
-              </SettingRow>
-              <SettingDivider />
-              <SettingRow>
-                <SettingRowTitle>
-                  {t('settings.data.clear_cache.title')}
-                  {cacheSize && <CacheText>({cacheSize}MB)</CacheText>}
-                </SettingRowTitle>
-                <HStack gap="5px">
-                  <Button onClick={handleClearCache}>{t('settings.data.clear_cache.button')}</Button>
-                </HStack>
-              </SettingRow>
-              <SettingDivider />
-              <SettingRow>
-                <SettingRowTitle>{t('settings.general.reset.title')}</SettingRowTitle>
-                <HStack gap="5px">
-                  <Button onClick={reset} danger>
-                    {t('settings.general.reset.title')}
-                  </Button>
-                </HStack>
-              </SettingRow>
-            </SettingGroup>
-          </>
-        )}
+        {menu === 'data' && <BasicDataSettings />}
         {menu === 'webdav' && <WebDavSettings />}
         {menu === 'nutstore' && <NutstoreSettings />}
         {menu === 's3' && <S3Settings />}
