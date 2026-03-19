@@ -117,6 +117,7 @@ const ThinkModelTypes = [
   'gpt5_codex',
   'gpt5_1_codex',
   'gpt5_1_codex_max',
+  'gpt5_2_codex',
   'gpt5_2',
   'gpt5pro',
   'gpt52pro',
@@ -201,6 +202,8 @@ export type AssistantSettings = {
   reasoning_effort_cache?: ReasoningEffortOption
   qwenThinkMode?: boolean
   toolUseMode: 'function' | 'prompt'
+  maxToolCalls?: number
+  enableMaxToolCalls?: boolean
 }
 
 export type AssistantPreset = Omit<Assistant, 'model'> & {
@@ -668,6 +671,7 @@ export const isAutoDetectionMethod = (method: string): method is AutoDetectionMe
 
 export type SidebarIcon =
   | 'assistants'
+  | 'agents'
   | 'store'
   | 'paintings'
   | 'translate'
@@ -693,6 +697,7 @@ export const WebSearchProviderIds = {
   exa: 'exa',
   'exa-mcp': 'exa-mcp',
   bocha: 'bocha',
+  querit: 'querit',
   'local-google': 'local-google',
   'local-bing': 'local-bing',
   'local-baidu': 'local-baidu'

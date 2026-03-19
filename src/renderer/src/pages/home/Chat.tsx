@@ -14,6 +14,8 @@ import { useChatContext } from '@renderer/hooks/useChatContext'
 import { useRuntime } from '@renderer/hooks/useRuntime'
 import { useNavbarPosition, useSettings } from '@renderer/hooks/useSettings'
 import { useShortcut } from '@renderer/hooks/useShortcuts'
+import AgentSessionInputbar from '@renderer/pages/agents/components/AgentSessionInputbar'
+import AgentSessionMessages from '@renderer/pages/agents/components/AgentSessionMessages'
 import { useShowTopics } from '@renderer/hooks/useStore'
 import { useTimer } from '@renderer/hooks/useTimer'
 import { EVENT_NAMES, EventEmitter } from '@renderer/services/EventService'
@@ -34,10 +36,8 @@ import ChatNavbar from './components/ChatNavBar'
 import ConversationLoadingState from './components/ConversationLoadingState'
 import { useCloseActiveConversationTabShortcut } from './hooks/useCloseActiveConversationTabShortcut'
 import { useConversationPanelLifecycle } from './hooks/useConversationPanelLifecycle'
-import AgentSessionInputbar from './Inputbar/AgentSessionInputbar'
 import { PinnedTodoPanel } from './Inputbar/components/PinnedTodoPanel'
 import Inputbar from './Inputbar/Inputbar'
-import AgentSessionMessages from './Messages/AgentSessionMessages'
 import ChatNavigation from './Messages/ChatNavigation'
 import Messages from './Messages/Messages'
 import NarrowLayout from './Messages/NarrowLayout'
@@ -654,12 +654,10 @@ const Chat: FC<Props> = (props) => {
     })
   }, [activeWorkspace, props, t])
 
-  // TODO: more info
   const AgentInvalid = useCallback(() => {
     return <Alert type="warning" message={t('chat.alerts.select_agent')} style={{ margin: '5px 16px' }} />
   }, [t])
 
-  // TODO: more info
   const SessionInvalid = useCallback(() => {
     return (
       <div className="flex h-full w-full items-center justify-center">

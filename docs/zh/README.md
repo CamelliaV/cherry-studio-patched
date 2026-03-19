@@ -1,6 +1,6 @@
 # Cherry Studio 补丁更新说明
 
-[English](../../README.md) | [中文](README.md)
+[中文](README.md) | [English](../en/README.md)
 
 本 README 仅保留本次补丁系列新增的功能。
 

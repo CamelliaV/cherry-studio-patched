@@ -268,7 +268,7 @@ export abstract class BaseApiClient<
     if (isSupportFlexServiceTierModel(model)) {
       return 15 * 1000 * 60
     }
-    return defaultTimeout
+    return DEFAULT_TIMEOUT
   }
 
   public async getMessageContent(

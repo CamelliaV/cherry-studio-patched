@@ -6,7 +6,13 @@ import { DeleteIcon, ResetIcon } from '@renderer/components/Icons'
 import { HStack } from '@renderer/components/Layout'
 import { SelectModelPopup } from '@renderer/components/Popups/SelectModelPopup'
 import Selector from '@renderer/components/Selector'
-import { DEFAULT_CONTEXTCOUNT, DEFAULT_TEMPERATURE, MAX_CONTEXT_COUNT } from '@renderer/config/constant'
+import {
+  DEFAULT_CONTEXTCOUNT,
+  DEFAULT_TEMPERATURE,
+  MAX_CONTEXT_COUNT,
+  MAX_TOOL_CALLS,
+  MIN_TOOL_CALLS
+} from '@renderer/config/constant'
 import { isEmbeddingModel, isRerankModel } from '@renderer/config/models'
 import { useModelGroups } from '@renderer/hooks/useProvider'
 import { useTimer } from '@renderer/hooks/useTimer'
@@ -41,11 +47,23 @@ interface Props {
 const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateAssistantSettings }) => {
   const [temperature, setTemperature] = useState(assistant?.settings?.temperature ?? DEFAULT_TEMPERATURE)
   const [contextCount, setContextCount] = useState(assistant?.settings?.contextCount ?? DEFAULT_CONTEXTCOUNT)
-  const [enableMaxTokens, setEnableMaxTokens] = useState(assistant?.settings?.enableMaxTokens ?? false)
+  const enableMaxTokens = useMemo(
+    () => assistant?.settings?.enableMaxTokens ?? DEFAULT_ASSISTANT_SETTINGS.enableMaxTokens,
+    [assistant?.settings?.enableMaxTokens]
+  )
   const [maxTokens, setMaxTokens] = useState(assistant?.settings?.maxTokens ?? 0)
-  const [streamOutput, setStreamOutput] = useState(assistant?.settings?.streamOutput)
-  const [toolUseMode, setToolUseMode] = useState<AssistantSettings['toolUseMode']>(
-    assistant?.settings?.toolUseMode ?? 'function'
+  const streamOutput = useMemo(
+    () => assistant?.settings?.streamOutput ?? DEFAULT_ASSISTANT_SETTINGS.streamOutput,
+    [assistant?.settings?.streamOutput]
+  )
+  const toolUseMode = useMemo(
+    () => assistant?.settings?.toolUseMode ?? DEFAULT_ASSISTANT_SETTINGS.toolUseMode,
+    [assistant?.settings?.toolUseMode]
+  )
+  const [maxToolCalls, setMaxToolCalls] = useState(assistant?.settings?.maxToolCalls ?? 20)
+  const enableMaxToolCalls = useMemo(
+    () => assistant?.settings?.enableMaxToolCalls ?? DEFAULT_ASSISTANT_SETTINGS.enableMaxToolCalls,
+    [assistant?.settings?.enableMaxToolCalls]
   )
   const { modelGroups: globalModelGroups, setModelGroups: setGlobalModelGroups } = useModelGroups()
   const [defaultModel, setDefaultModel] = useState(assistant?.defaultModel)
@@ -54,11 +72,17 @@ const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateA
     assistant?.modelGroupRoutingMode ?? 'order-first'
   )
   const [topP, setTopP] = useState(assistant?.settings?.topP ?? 1)
-  const [enableTopP, setEnableTopP] = useState(assistant?.settings?.enableTopP ?? false)
+  const enableTopP = useMemo(
+    () => assistant?.settings?.enableTopP ?? DEFAULT_ASSISTANT_SETTINGS.enableTopP,
+    [assistant?.settings?.enableTopP]
+  )
   const [customParameters, setCustomParameters] = useState<AssistantSettingCustomParameters[]>(
     assistant?.settings?.customParameters ?? []
   )
-  const [enableTemperature, setEnableTemperature] = useState(assistant?.settings?.enableTemperature ?? false)
+  const enableTemperature = useMemo(
+    () => assistant?.settings?.enableTemperature ?? DEFAULT_ASSISTANT_SETTINGS.enableTemperature,
+    [assistant?.settings?.enableTemperature]
+  )
 
   const customParametersRef = useRef(customParameters)
 
@@ -394,15 +418,11 @@ const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateA
 
   const onReset = () => {
     setTemperature(DEFAULT_ASSISTANT_SETTINGS.temperature)
-    setEnableTemperature(DEFAULT_ASSISTANT_SETTINGS.enableTemperature ?? false)
     setContextCount(DEFAULT_ASSISTANT_SETTINGS.contextCount)
-    setEnableMaxTokens(DEFAULT_ASSISTANT_SETTINGS.enableMaxTokens ?? false)
-    setMaxTokens(DEFAULT_ASSISTANT_SETTINGS.maxTokens ?? 0)
-    setStreamOutput(DEFAULT_ASSISTANT_SETTINGS.streamOutput)
+    setMaxTokens(DEFAULT_ASSISTANT_SETTINGS.maxTokens)
     setTopP(DEFAULT_ASSISTANT_SETTINGS.topP)
-    setEnableTopP(DEFAULT_ASSISTANT_SETTINGS.enableTopP ?? false)
-    setCustomParameters(DEFAULT_ASSISTANT_SETTINGS.customParameters ?? [])
-    setToolUseMode(DEFAULT_ASSISTANT_SETTINGS.toolUseMode)
+    setCustomParameters(DEFAULT_ASSISTANT_SETTINGS.customParameters)
+    setMaxToolCalls(DEFAULT_ASSISTANT_SETTINGS.maxToolCalls)
     updateAssistantSettings(DEFAULT_ASSISTANT_SETTINGS)
   }
 
@@ -419,7 +439,7 @@ const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateA
         selectedModelGroupId: undefined,
         candidateModels: undefined
       })
-      // TODO: 需要根据配置来设置默认值
+      // TODO: 移除根据模型自动修改参数的逻辑
       if (selectedModel.name.includes('kimi-k2')) {
         setTemperature(0.6)
         setTimeoutTimer('onSelectModel_1', () => updateAssistantSettings({ temperature: 0.6 }), 500)
@@ -456,7 +476,6 @@ const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateA
               variant="filled"
               icon={<DeleteIcon size={14} className="lucide-custom" />}
               onClick={() => {
-                setDefaultModel(undefined)
                 updateAssistant({ ...assistant, defaultModel: undefined })
               }}
               danger
@@ -574,7 +593,6 @@ const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateA
         <Switch
           checked={enableTemperature}
           onChange={(enabled) => {
-            setEnableTemperature(enabled)
             updateAssistantSettings({ enableTemperature: enabled })
           }}
         />
@@ -622,7 +640,6 @@ const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateA
         <Switch
           checked={enableTopP}
           onChange={(enabled) => {
-            setEnableTopP(enabled)
             updateAssistantSettings({ enableTopP: enabled })
           }}
         />
@@ -730,8 +747,6 @@ const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateA
               })
               if (!confirmed) return
             }
-
-            setEnableMaxTokens(enabled)
             updateAssistantSettings({ enableMaxTokens: enabled })
           }}
         />
@@ -763,7 +778,6 @@ const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateA
         <Switch
           checked={streamOutput}
           onChange={(checked) => {
-            setStreamOutput(checked)
             updateAssistantSettings({ streamOutput: checked })
           }}
         />
@@ -778,12 +792,45 @@ const AssistantModelSettings: FC<Props> = ({ assistant, updateAssistant, updateA
             { label: t('assistants.settings.tool_use_mode.function'), value: 'function' }
           ]}
           onChange={(value) => {
-            setToolUseMode(value)
             updateAssistantSettings({ toolUseMode: value })
           }}
           size={14}
         />
       </SettingRow>
+      <Divider style={{ margin: '10px 0' }} />
+      <SettingRow style={{ minHeight: 30 }}>
+        <HStack alignItems="center">
+          <Label>{t('assistants.settings.max_tool_calls.label')}</Label>
+          <Tooltip title={t('assistants.settings.max_tool_calls.tip')}>
+            <QuestionIcon />
+          </Tooltip>
+        </HStack>
+        <Switch
+          checked={enableMaxToolCalls}
+          onChange={(enabled) => {
+            updateAssistantSettings({ enableMaxToolCalls: enabled })
+          }}
+        />
+      </SettingRow>
+      {enableMaxToolCalls && (
+        <Row align="middle" style={{ marginTop: 5, marginBottom: 5 }}>
+          <Col span={24}>
+            <InputNumber
+              min={MIN_TOOL_CALLS}
+              max={MAX_TOOL_CALLS}
+              step={1}
+              value={maxToolCalls}
+              onChange={(value) => {
+                if (!isNull(value)) {
+                  setMaxToolCalls(value)
+                  setTimeoutTimer('maxToolCalls_onChange', () => updateAssistantSettings({ maxToolCalls: value }), 500)
+                }
+              }}
+              style={{ width: '100%' }}
+            />
+          </Col>
+        </Row>
+      )}
       <Divider style={{ margin: '10px 0' }} />
       <SettingRow style={{ minHeight: 30 }}>
         <Label>{t('models.custom_parameters')}</Label>

@@ -17,6 +17,7 @@ import {
 } from '@renderer/store/toolPermissions'
 import { delay, runAsyncFunction } from '@renderer/utils'
 import { checkDataLimit } from '@renderer/utils'
+import { sendToolApprovalNotification } from '@renderer/utils/userConfirmation'
 import { defaultLanguage } from '@shared/config/constant'
 import { normalizeLanguage } from '@shared/config/languages'
 import { IpcChannel } from '@shared/IpcChannel'
@@ -199,7 +200,6 @@ export function useAppInit() {
       logger.debug('Renderer received tool permission request', {
         requestId: payload.requestId,
         toolName: payload.toolName,
-        expiresAt: payload.expiresAt,
         suggestionCount: payload.suggestions.length,
         autoApprove: payload.autoApprove
       })
@@ -235,6 +235,9 @@ export function useAppInit() {
       }
 
       dispatch(toolPermissionsActions.requestReceived(payload))
+
+      // Send system notification for agent tool approval
+      sendToolApprovalNotification(payload.toolName)
     }
 
     const resultListener = (_event: Electron.IpcRendererEvent, payload: ToolPermissionResultPayload) => {

@@ -1,9 +1,7 @@
 import { loggerService } from '@logger'
 import { ErrorBoundary } from '@renderer/components/ErrorBoundary'
-import { useAgentSessionInitializer } from '@renderer/hooks/agents/useAgentSessionInitializer'
 import { useAssistants } from '@renderer/hooks/useAssistant'
 import { useRendererPerfMonitor } from '@renderer/hooks/useRendererPerfMonitor'
-import { useRuntime } from '@renderer/hooks/useRuntime'
 import { useNavbarPosition, useSettings } from '@renderer/hooks/useSettings'
 import { useShortcut } from '@renderer/hooks/useShortcuts'
 import { useActiveTopic } from '@renderer/hooks/useTopic'
@@ -269,9 +267,6 @@ const HomePage: FC = () => {
   const { isLeftNavbar } = useNavbarPosition()
   const { t } = useTranslation()
 
-  // Initialize agent session hook
-  useAgentSessionInitializer()
-
   const location = useLocation()
   const state = location.state
 
@@ -348,8 +343,6 @@ const HomePage: FC = () => {
 
   const { showAssistants, showTopics, topicPosition } = useSettings()
   const dispatch = useDispatch()
-  const { chat } = useRuntime()
-  const { activeTopicOrSession } = chat
 
   useShortcut('copy_background_image_uri', async () => {
     const currentBackgroundImageUri = backgroundSlideshowService.getCurrentImageUri()
@@ -486,7 +479,6 @@ const HomePage: FC = () => {
   )
 
   const setActiveAssistant = useCallback(
-    // TODO: allow to set it as null.
     (newAssistant: Assistant) => {
       if (newAssistant.id === activeAssistant?.id) return
 
@@ -839,7 +831,6 @@ const HomePage: FC = () => {
           setActiveTopic={setActiveTopic}
           setActiveAssistant={setActiveAssistant}
           position="left"
-          activeTopicOrSession={activeTopicOrSession}
         />
       )}
       <ContentContainer id={isLeftNavbar ? 'content-container' : undefined}>

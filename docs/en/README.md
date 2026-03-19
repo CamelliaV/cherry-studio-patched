@@ -1,0 +1,168 @@
+# Cherry Studio Patch Updates
+
+[English](README.md) | [中文](../zh/README.md)
+
+This README reflects only the new functionality added in this patch series.
+
+## UI Preview
+
+![Patched UI preview](../../imgs/patch-ui-showcase.png)
+
+## Core Feature Updates
+
+1. Transparent persistent multi-tab UI
+- Multi-tab bar is fully transparent (not blurred card style).
+- Middle-click closes tabs.
+- Open tabs and active tab are restored after app restart.
+- Tab strip horizontal scroll position is remembered.
+
+2. Workspace-based tab groups
+- Tabs can be grouped into separate workspaces.
+- You can create, switch, rename, and delete workspaces.
+- Each workspace keeps its own tab set and active conversation.
+- Workspace state is persisted across app restarts.
+
+3. Stylish timeline redesign
+- Timeline no longer disappears while scrolling.
+- First/last timeline node clipping is fixed.
+- Node active state is aligned with navigation/viewport position.
+- Hovering a node shows compact user/model preview snippets.
+
+4. Timeline position persistence
+- Conversation position is persisted by timeline node index.
+- Reopening the app restores each conversation to its saved node.
+
+5. Timeline hotkeys
+- `Alt+ArrowUp`: jump to previous timeline node.
+- `Alt+ArrowDown`: jump to next timeline node.
+- `Alt+Shift+ArrowUp`: jump to first timeline node.
+- `Alt+Shift+ArrowDown`: jump to last timeline node.
+
+6. Model groups with routing modes
+- Assistants can use either a single model or a model group.
+- Model groups are global and shared across assistants.
+- Model groups are user-defined (no same-model/provider restriction).
+- Two routing modes are supported:
+  - `order-first`: try models in group order (fallback to next when prior one is not accessible).
+  - `round-robin`: request 1 -> model 1, request 2 -> model 2, then loop.
+- You can switch source (single model vs group) from assistant settings and from the chat navbar model switcher.
+
+7. Send while loading
+- You can send the next message while a response is still generating.
+
+8. Arch Linux PKGBUILD support
+- Added Arch Linux package build files for easy installation:
+  - `pkgbuilds/arch/cherry-studio-bin/PKGBUILD`
+  - `pkgbuilds/arch/cherry-studio-bin/.SRCINFO`
+  - `pkgbuilds/arch/README.md`
+- Supports `x86_64` and `aarch64`.
+
+9. Launcher navigator (keyboard + mouse)
+- Added a dedicated third tab: `Open Launcher`.
+- Added launcher hotkey: `Ctrl+P` / `Cmd+P`.
+- Launcher supports assistant/topic search and keyboard navigation (`↑`, `↓`, `Enter`, `Esc`).
+
+10. Context menu parity across navigation surfaces
+- Right-click assistant/topic entries in conversation multi-tabs now reuse the same menus as the left sidebar.
+- Right-click assistant/topic entries in launcher tab and launcher popup now reuse the same menus as the left sidebar.
+- Assistant/topic editing and management actions are now consistent in all these entry points.
+
+11. Create assistant/topic directly from launcher
+- Added quick create actions inside launcher:
+  - `+ Assistant`
+  - `+ Topic` (under current active assistant)
+- New items are created and selected immediately for fast flow.
+
+12. Model-group provider visibility
+- Model-group member rows now display `Model | Provider`.
+- This makes inactive/failing provider sources easier to identify when groups contain similarly named models.
+
+13. Markdown export with image assets
+- Topic Markdown export now preserves image-only user inputs.
+- Export behavior:
+  - Pure text topic: only `.md`.
+  - Topic with uploaded image files: `.md` + sibling `<markdown-name>.assets/` folder, with Markdown image links pointing to copied files.
+  - URL-based images remain URL links in Markdown.
+
+14. GPT-5.2+ reasoning effort support
+- GPT-5.2 and newer non-chat, non-pro OpenAI reasoning models now expose the correct reasoning-effort options, including `xhigh` where supported.
+- This keeps Cherry Studio aligned with the higher reasoning budget available for newer GPT-5 reasoning models.
+
+15. Launcher action for next background image
+- When background slideshow is enabled, the `Ctrl+P` / `Cmd+P` launcher now includes a `Next Background Image` action.
+- The action is searchable, works in launcher popup/tab mode, uses UI translations, and closes the popup after a successful switch.
+
+16. Token statistics dashboard
+- Added a dedicated `Settings -> Statistics` page.
+- Token usage is aggregated at assistant/topic/conversation levels.
+- Includes prompt tokens, completion tokens, total tokens, message counts, and update time.
+
+17. Faster model-group management from chat navbar
+- The top model switcher now includes an `Edit Model Groups` action.
+- Clicking it opens assistant settings directly on the model tab.
+- Model-group labels/counts in navbar selector are now fully localized.
+
+18. Background slideshow for chat content
+- Added a configurable background slideshow for the chat content area.
+- Settings are available in `Settings -> Display -> Background Slideshow`.
+- Supports multiple image folders, switch interval, opacity, and manual `Next Image`.
+- Symlinked image files and symlinked subdirectories are treated the same as regular entries, so curated link folders work as slideshow sources.
+- Added shortcut `Ctrl/Cmd+Shift+U` to reveal the current background image in folder.
+
+19. Claude Code compatibility mode for Anthropic providers
+- Added a provider-level `Claude Code compatibility` toggle.
+- When enabled, requests use Claude Code-compatible headers and user-agent behavior.
+- Custom Header popup now supports quick applying Claude Code compatibility headers.
+
+20. Launcher assistant-click behavior fix
+- In launcher popup (`Ctrl/Cmd+P`), clicking an assistant now creates a new topic and keeps focus on that new topic tab.
+- Fixed the regression where UI could jump to the new topic and then snap back to the previously active tab.
+
+21. Plain text link detection in user messages
+- When input-markdown rendering is disabled, plain URLs in user messages are now rendered as clickable links.
+- Includes safe external open behavior and tests for parsing/click handling.
+
+22. Multi-tab conversation switch state stability
+- Switching conversation tabs with `Ctrl+Tab` / `Ctrl+Shift+Tab` now preserves the per-tab reading scroll position reliably.
+- Returning to a previous tab no longer causes delayed jump caused by code-block re-layout after tab restore.
+- Timeline/navigation state binding is isolated per conversation tab container to prevent cross-tab overwrite.
+
+23. Conversation switching and history rendering polish
+- Conversation tab panels now stay mounted to enable instant tab return with more reliable per-tab state retention.
+- Added a short loading skeleton + transition overlay when switching into conversations whose content is still loading.
+- `Ctrl+Tab` / `Ctrl+Shift+Tab` handling now uses key latching to avoid repeated accidental tab hops while holding keys.
+- Chat flow history rendering was refactored to strongly typed data processing with memoized selectors for lower re-render overhead.
+
+24. Large-topic scroll performance and stability hardening
+- Optimized timeline-anchor lookup to avoid heavy per-scroll DOM scans in long conversations.
+- Reduced compositor pressure in message/timeline UI by removing expensive effects and forced GPU-layer hints.
+- Added adaptive limits for timeline anchor rendering in very large topics.
+- Added `content-visibility` optimization for message items to reduce offscreen rendering overhead.
+- Disabled timeline anchor rail automatically for very large message counts to avoid renderer saturation.
+
+25. Conversation-tab close shortcut
+- In the chat conversation multi-tab strip, `Ctrl/Cmd+W` now closes the active conversation tab.
+- The last remaining conversation tab stays open, so the window and current conversation view are not closed accidentally.
+
+26. Chat message viewport layout fix
+- Fixed a layout regression where the conversation header could render while the message viewport collapsed to zero height.
+- The shared message scroller now explicitly stretches to fill the available chat area, preventing the chat body from disappearing.
+
+27. Phase 1 renderer performance groundwork
+- Added dev-only renderer performance monitoring for timings, long tasks, and heap snapshots.
+- Conversation panels now support `active` / `warm` / `cold` lifecycle control, cooling inactive tabs only below 10% available RAM and warming them again only above 15%.
+- Warm inactive tabs now suspend timeline-anchor and token-estimation work while shared message/timeline derivations cut duplicate recomputation on the active path.
+- Added direct timeline jumps with `Alt+Numpad1..9`.
+
+28. Chat route persistence and render-stability hardening
+- The home chat route now stays mounted when navigating to settings and other pages, preserving stream state, scroll state, and local conversation UI state on return.
+- Startup now restores the persisted active tab before route-sync side effects run, while tab state is kept in persisted Redux storage.
+- Large streaming markdown blocks now defer heavy render work more aggressively, and several message/block selectors were stabilized to cut redundant rerenders across chat, timeline, outline, and menubar surfaces.
+- Reloaded conversations now normalize stale block statuses left behind by interrupted streams, and timeline anchors visually mark failed assistant replies without overriding saved scroll restoration.
+
+## Arch Linux Quick Install
+
+```bash
+cd pkgbuilds/arch/cherry-studio-bin
+makepkg -si
+```

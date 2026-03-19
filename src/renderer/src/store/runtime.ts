@@ -29,14 +29,12 @@ export interface ChatState {
   /** UI state. Map agent id to active session id.
    *  null represents no active session  */
   activeSessionIdMap: Record<string, string | null>
-  /** meanwhile active Assistants or Agents */
+  /** whether the chat UI is showing normal topics or agent sessions */
   activeTopicOrSession: 'topic' | 'session'
   /** topic ids that are currently being renamed */
   renamingTopics: string[]
   /** topic ids that are newly renamed */
   newlyRenamedTopics: string[]
-  /** is a session waiting for updating/deleting. undefined and false share same semantics.  */
-  sessionWaiting: Record<string, boolean>
 }
 
 export interface WebSearchState {
@@ -51,6 +49,8 @@ export interface UpdateState {
   downloadProgress: number
   available: boolean
   ignore: boolean
+  /** Whether the update check was manually triggered by user clicking the button */
+  manualCheck: boolean
 }
 
 export interface RuntimeState {
@@ -75,6 +75,11 @@ export interface RuntimeState {
   websearch: WebSearchState
   /** Detected region from IP lookup (not persisted, re-detected on each app start) */
   detectedRegion: MinAppRegion | null
+  /** Query whether a task is processing or not. undefined and false share same semantics.  */
+  loadingMap: Record<string, boolean>
+  // Migrated from useApiServer, it's global state now
+  /** Is the api server running */
+  apiServerRunning: boolean
 }
 
 export interface ExportState {
@@ -99,7 +104,8 @@ const initialState: RuntimeState = {
     downloaded: false,
     downloadProgress: 0,
     available: false,
-    ignore: false
+    ignore: false,
+    manualCheck: false
   },
   export: {
     isExporting: false
@@ -109,16 +115,17 @@ const initialState: RuntimeState = {
     selectedMessageIds: [],
     activeTopic: null,
     activeAgentId: null,
-    activeTopicOrSession: 'topic',
     activeSessionIdMap: {},
+    activeTopicOrSession: 'topic',
     renamingTopics: [],
-    newlyRenamedTopics: [],
-    sessionWaiting: {}
+    newlyRenamedTopics: []
   },
   websearch: {
     activeSearches: {}
   },
-  detectedRegion: null
+  detectedRegion: null,
+  loadingMap: {},
+  apiServerRunning: false
 }
 
 const runtimeSlice = createSlice({
@@ -205,12 +212,19 @@ const runtimeSlice = createSlice({
       }
       state.websearch.activeSearches[requestId] = status
     },
-    setSessionWaitingAction: (state, action: PayloadAction<{ id: string; value: boolean }>) => {
-      const { id, value } = action.payload
-      state.chat.sessionWaiting[id] = value
+    startLoadingAction: (state, action: PayloadAction<{ id: string }>) => {
+      const { id } = action.payload
+      state.loadingMap[id] = true
+    },
+    finishLoadingAction: (state, action: PayloadAction<{ id: string }>) => {
+      const { id } = action.payload
+      delete state.loadingMap[id]
     },
     setDetectedRegion: (state, action: PayloadAction<MinAppRegion | null>) => {
       state.detectedRegion = action.payload
+    },
+    setApiServerRunningAction: (state, action: PayloadAction<boolean>) => {
+      state.apiServerRunning = action.payload
     }
   }
 })
@@ -238,12 +252,14 @@ export const {
   setActiveTopicOrSessionAction,
   setRenamingTopics,
   setNewlyRenamedTopics,
-  setSessionWaitingAction,
+  startLoadingAction,
+  finishLoadingAction,
   // WebSearch related actions
   setActiveSearches,
   setWebSearchStatus,
   // Region detection
-  setDetectedRegion
+  setDetectedRegion,
+  setApiServerRunningAction
 } = runtimeSlice.actions
 
 export default runtimeSlice.reducer
